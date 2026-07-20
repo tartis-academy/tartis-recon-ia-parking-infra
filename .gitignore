@@ -1,0 +1,12 @@
+.env
+.env.local
+
+docker-compose.override.yml
+
+.DS_Store
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+.idea/
+.vscode/*

@@ -1,0 +1,9 @@
+# Auto detecta text files y normaliza a LF en el repo
+* text=auto eol=lf
+
+# Fuerza LF explícitamente
+*.yml text eol=lf
+*.yaml text eol=lf
+*.sql text eol=lf
+*.sh text eol=lf
+*.md text eol=lf
