@@ -1,0 +1,366 @@
+{
+  "info": {
+    "_postman_id": "461449b1-0db5-4ad4-bb34-12b0eaa144b6",
+    "name": "Parking · tariff-service",
+    "description": "tariff-service — verificado contra `origin/release123` el 2026-07-23.\n\nTodos los endpoints de `TariffRestAdapter` estan implementados. Base path `/v1/tariffs`.\n\nTipos validos de `type`: `CAR`, `CAR_PMR`, `MOTORBIKE`.\n\nAvisos sobre el contrato:\n- `POST` usa `TariffCreateRequest` (`name`, `type`, `pricePerMinute`, `basePrice`,\n  `active`) y `PUT` usa `TariffUpdateRequest` (`name`, `pricePerMinute`,\n  `basePrice`): **el PUT no acepta `type` ni `active`**. El tipo no se cambia una\n  vez creada; el estado se cambia con el PATCH.\n- `pricePerMinute` debe ser > 0 y `basePrice` >= 0 (`@DecimalMin`).\n- `POST /v1/tariffs/calculate` — el que stay necesitaria en el check-OUT — **no\n  existe**. Tampoco `GET /v1/tariffs/current` ni `PATCH /{id}/deactivate`.\n",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Crear tarifa",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrlTariff}}/v1/tariffs",
+          "host": [
+            "{{baseUrlTariff}}"
+          ],
+          "path": [
+            "v1",
+            "tariffs"
+          ]
+        },
+        "description": "POST /v1/tariffs -> 201 Created.\n\nTodos los campos son obligatorios. `pricePerMinute` > 0 estricto: un 0 devuelve 400.\n\nGuarda el id en `tariffId`.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Tarifa estandar coche\",\n  \"type\": \"{{vehicleType}}\",\n  \"pricePerMinute\": 0.05,\n  \"basePrice\": 1.0,\n  \"active\": true\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('201 Created', () => pm.response.to.have.status(201));",
+              "const body = pm.response.json();",
+              "pm.environment.set('tariffId', body.id);",
+              "pm.test('nace activa', () => pm.expect(body.active).to.be.true);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Tarifas activas por tipo",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrlTariff}}/v1/tariffs/active?type=CAR",
+          "host": [
+            "{{baseUrlTariff}}"
+          ],
+          "path": [
+            "v1",
+            "tariffs",
+            "active"
+          ],
+          "query": [
+            {
+              "key": "type",
+              "value": "{{vehicleType}}",
+              "description": "CAR | CAR_PMR | MOTORBIKE (obligatorio)"
+            }
+          ]
+        },
+        "description": "GET /v1/tariffs/active?type={vehicleType} -> 200 con la lista de tarifas activas de ese tipo.\n\n`type` es **obligatorio** (`@RequestParam` sin default): sin el, 400.\n\nEs el endpoint que stay-service usara para resolver el `tariffId` de la estancia cuando el adaptador real sustituya al `StubStayTariffAdapter`."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('devuelve un array', () => pm.expect(body).to.be.an('array'));",
+              "if (body.length > 0) { pm.environment.set('tariffId', body[0].id); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Listar tarifas",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrlTariff}}/v1/tariffs",
+          "host": [
+            "{{baseUrlTariff}}"
+          ],
+          "path": [
+            "v1",
+            "tariffs"
+          ]
+        },
+        "description": "GET /v1/tariffs -> 200 con todas las tarifas, activas o no."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Obtener tarifa por id",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrlTariff}}/v1/tariffs/{{tariffId}}",
+          "host": [
+            "{{baseUrlTariff}}"
+          ],
+          "path": [
+            "v1",
+            "tariffs",
+            "{{tariffId}}"
+          ]
+        },
+        "description": "GET /v1/tariffs/{id} -> 200.\n\nNota de implementacion: `/active` se declara ANTES que `/{id}` en el controlador para que Spring no intente parsear 'active' como UUID."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Actualizar tarifa",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrlTariff}}/v1/tariffs/{{tariffId}}",
+          "host": [
+            "{{baseUrlTariff}}"
+          ],
+          "path": [
+            "v1",
+            "tariffs",
+            "{{tariffId}}"
+          ]
+        },
+        "description": "PUT /v1/tariffs/{id} -> 200.\n\nSolo `name`, `pricePerMinute` y `basePrice`. Mandar `type` o `active` aqui no hace nada: no estan en `TariffUpdateRequest`.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Tarifa estandar coche (revisada)\",\n  \"pricePerMinute\": 0.07,\n  \"basePrice\": 1.5\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "pm.test('precio actualizado', () => pm.expect(Number(pm.response.json().pricePerMinute)).to.eql(0.07));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Desactivar tarifa",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrlTariff}}/v1/tariffs/{{tariffId}}/status",
+          "host": [
+            "{{baseUrlTariff}}"
+          ],
+          "path": [
+            "v1",
+            "tariffs",
+            "{{tariffId}}",
+            "status"
+          ]
+        },
+        "description": "PATCH /v1/tariffs/{id}/status -> 200.\n\n`{\"active\": false}` -> `DeactivateTariffUseCase`; `{\"active\": true}` -> `ActivateTariffUseCase`. A diferencia de vehicle, aqui el PATCH **si** lee el body.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"active\": false\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "pm.test('queda inactiva', () => pm.expect(pm.response.json().active).to.be.false);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Reactivar tarifa",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrlTariff}}/v1/tariffs/{{tariffId}}/status",
+          "host": [
+            "{{baseUrlTariff}}"
+          ],
+          "path": [
+            "v1",
+            "tariffs",
+            "{{tariffId}}",
+            "status"
+          ]
+        },
+        "description": "Misma ruta con `active: true`. Deja la tarifa lista para el siguiente pase de la coleccion.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"active\": true\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "pm.test('vuelve a estar activa', () => pm.expect(pm.response.json().active).to.be.true);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Pendiente de implementar",
+      "description": "Rutas del openapi.yml sin controlador detras.",
+      "item": [
+        {
+          "name": "[TODO] Calcular importe de una estancia",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrlTariff}}/v1/tariffs/calculate",
+              "host": [
+                "{{baseUrlTariff}}"
+              ],
+              "path": [
+                "v1",
+                "tariffs",
+                "calculate"
+              ]
+            },
+            "description": "**El endpoint que bloquea el check-out.** El openapi.yml lo declara, `TariffRestAdapter` no lo tiene -> 404/405.\n\nHasta que exista, stay-service no puede calcular el importe al salir y `StayTariffPort` se queda con el `StubStayTariffAdapter` (devuelve un tariffId fijo).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"CAR\",\n  \"checkIn\": \"2026-07-23T08:00:00Z\",\n  \"checkOut\": \"2026-07-23T10:30:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "[TODO] Tarifa vigente",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrlTariff}}/v1/tariffs/current?type=CAR",
+              "host": [
+                "{{baseUrlTariff}}"
+              ],
+              "path": [
+                "v1",
+                "tariffs",
+                "current"
+              ],
+              "query": [
+                {
+                  "key": "type",
+                  "value": "CAR",
+                  "description": "no implementado"
+                }
+              ]
+            },
+            "description": "`GET /v1/tariffs/current` esta en el contrato pero no en el controlador. Spring intentara casar `current` con `/{id}` (UUID) -> 400.\n\nMientras tanto, usa `GET /v1/tariffs/active?type=`."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

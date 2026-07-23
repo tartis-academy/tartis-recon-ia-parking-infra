@@ -1,0 +1,331 @@
+{
+  "info": {
+    "_postman_id": "0b71d01b-4031-47d4-b93d-b842573d8004",
+    "name": "Parking · vehicle-service",
+    "description": "vehicle-service — verificado contra `origin/release123` el 2026-07-23.\n\nTodos los endpoints de esta coleccion **estan implementados y responden de\nverdad**. Base path `/v1/vehicles` (`VehicleRestAdapter`).\n\nTipos validos de `type`: `CAR`, `CAR_PMR`, `MOTORBIKE` (enum `VehicleType`).\n\nAvisos sobre el contrato:\n- `POST` y `PUT` comparten `VehicleRequest`, que exige `type`, `plate` y\n  **`active`** (`@NotNull`). Omitir `active` devuelve 400.\n- `PATCH /{id}/status` **no lee body**: siempre desactiva y devuelve 204.\n  El `active` del body que promete el openapi.yml todavia no se lee.\n- El listado **no** admite paginacion (`page`/`size`/`active`/`type`) aunque el\n  contrato la declare.\n",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Listar vehiculos",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrlVehicle}}/v1/vehicles",
+          "host": [
+            "{{baseUrlVehicle}}"
+          ],
+          "path": [
+            "v1",
+            "vehicles"
+          ]
+        },
+        "description": "GET /v1/vehicles -> 200 con la lista completa.\n\nSin paginacion: los parametros page/size/active/type del openapi.yml todavia no existen en el controlador."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "pm.test('devuelve un array', () => pm.expect(pm.response.json()).to.be.an('array'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Crear vehiculo",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrlVehicle}}/v1/vehicles",
+          "host": [
+            "{{baseUrlVehicle}}"
+          ],
+          "path": [
+            "v1",
+            "vehicles"
+          ]
+        },
+        "description": "POST /v1/vehicles -> 201 Created.\n\n`type`, `plate` y `active` son OBLIGATORIOS (validacion @NotBlank/@NotNull); si falta alguno -> 400.\nEl resto (`brand`, `model`, `color`, `numDoors`, `hasSidecar`) es opcional.\n\nGuarda `uniqueId` en la variable de entorno `vehicleId` y la matricula en `plate`.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"type\": \"{{vehicleType}}\",\n  \"plate\": \"{{plate}}\",\n  \"brand\": \"Seat\",\n  \"model\": \"Leon\",\n  \"color\": \"Gris\",\n  \"numDoors\": 5,\n  \"hasSidecar\": false,\n  \"active\": true\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// Matricula aleatoria (formato ES: 4 digitos + 3 letras) para poder",
+              "// reejecutar la coleccion sin chocar con un vehiculo ya creado.",
+              "const digits = String(Math.floor(1000 + Math.random() * 9000));",
+              "const abc = 'BCDFGHJKLMNPRSTVWXYZ';",
+              "let letters = '';",
+              "for (let i = 0; i < 3; i++) {",
+              "  letters += abc.charAt(Math.floor(Math.random() * abc.length));",
+              "}",
+              "pm.environment.set('plate', digits + letters);"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('201 Created', () => pm.response.to.have.status(201));",
+              "const body = pm.response.json();",
+              "pm.test('devuelve uniqueId', () => pm.expect(body.uniqueId).to.be.a('string'));",
+              "pm.environment.set('vehicleId', body.uniqueId);",
+              "pm.environment.set('plate', body.plate);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Obtener vehiculo por id",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrlVehicle}}/v1/vehicles/{{vehicleId}}",
+          "host": [
+            "{{baseUrlVehicle}}"
+          ],
+          "path": [
+            "v1",
+            "vehicles",
+            "{{vehicleId}}"
+          ]
+        },
+        "description": "GET /v1/vehicles/{id} -> 200, o 404 si no existe (`VehicleNotFoundException`).\n\nUsa `vehicleId` de 'Crear vehiculo'."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "pm.test('el id coincide', () => pm.expect(pm.response.json().uniqueId).to.eql(pm.environment.get('vehicleId')));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Obtener vehiculo por matricula",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrlVehicle}}/v1/vehicles/plate/{{plate}}",
+          "host": [
+            "{{baseUrlVehicle}}"
+          ],
+          "path": [
+            "v1",
+            "vehicles",
+            "plate",
+            "{{plate}}"
+          ]
+        },
+        "description": "GET /v1/vehicles/plate/{plate} -> 200, o 404 si no existe.\n\n**Este es el endpoint que consume stay-service en el check-in** (`StayVehicleClientAdapter.getOrCreateVehicle`): si da 404, stay crea el vehiculo con un POST."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "pm.test('la matricula coincide', () => pm.expect(pm.response.json().plate).to.eql(pm.environment.get('plate')));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Actualizar vehiculo",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrlVehicle}}/v1/vehicles/{{vehicleId}}",
+          "host": [
+            "{{baseUrlVehicle}}"
+          ],
+          "path": [
+            "v1",
+            "vehicles",
+            "{{vehicleId}}"
+          ]
+        },
+        "description": "PUT /v1/vehicles/{id} -> 200. Mismo body que el POST: `type`, `plate` y `active` obligatorios.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"type\": \"{{vehicleType}}\",\n  \"plate\": \"{{plate}}\",\n  \"brand\": \"Seat\",\n  \"model\": \"Leon FR\",\n  \"color\": \"Negro\",\n  \"numDoors\": 5,\n  \"hasSidecar\": false,\n  \"active\": true\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "pm.test('modelo actualizado', () => pm.expect(pm.response.json().model).to.eql('Leon FR'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Desactivar vehiculo (baja logica)",
+      "request": {
+        "method": "PATCH",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrlVehicle}}/v1/vehicles/{{vehicleId}}/status",
+          "host": [
+            "{{baseUrlVehicle}}"
+          ],
+          "path": [
+            "v1",
+            "vehicles",
+            "{{vehicleId}}",
+            "status"
+          ]
+        },
+        "description": "PATCH /v1/vehicles/{id}/status -> 204 No Content.\n\n**Sin body.** El controlador no lee `active`: siempre desactiva (`deleteVehicleUseCase.deactivate`). Reactivar no es posible por REST hoy.\n\nDeja el vehiculo listo para probar **RN-11** en el check-in de stay (vehiculo desactivado -> 422)."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('204 No Content', () => pm.response.to.have.status(204));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Pendiente de implementar",
+      "description": "Rutas o comportamientos que estan en el openapi.yml pero NO en el controlador. Sirven de checklist contrato-vs-implementacion.",
+      "item": [
+        {
+          "name": "[TODO] Listar vehiculos paginado",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrlVehicle}}/v1/vehicles?page=0&size=20&active=true&type=CAR",
+              "host": [
+                "{{baseUrlVehicle}}"
+              ],
+              "path": [
+                "v1",
+                "vehicles"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0",
+                  "description": "ignorado hoy"
+                },
+                {
+                  "key": "size",
+                  "value": "20",
+                  "description": "ignorado hoy"
+                },
+                {
+                  "key": "active",
+                  "value": "true",
+                  "description": "ignorado hoy"
+                },
+                {
+                  "key": "type",
+                  "value": "CAR",
+                  "description": "ignorado hoy"
+                }
+              ]
+            },
+            "description": "El openapi.yml declara paginacion y filtros en el listado; el controlador los ignora. Esta request **devuelve 200 con la lista completa**, no una pagina: los query params se descartan en silencio."
+          },
+          "response": []
+        },
+        {
+          "name": "[TODO] Reactivar vehiculo",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrlVehicle}}/v1/vehicles/{{vehicleId}}/status",
+              "host": [
+                "{{baseUrlVehicle}}"
+              ],
+              "path": [
+                "v1",
+                "vehicles",
+                "{{vehicleId}}",
+                "status"
+              ]
+            },
+            "description": "El contrato prevee que `PATCH /{id}/status` lea `active` del body para activar o desactivar. Hoy el body **se ignora** y siempre desactiva.\n\nPunto 4 de [[Tareas por hacer en orden de importancia]].",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"active\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

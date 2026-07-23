@@ -1,0 +1,285 @@
+{
+  "info": {
+    "_postman_id": "fa209e6c-b3c0-4259-b56b-17bb95f01ec3",
+    "name": "Parking · ticket-service",
+    "description": "ticket-service — verificado contra `origin/release123` el 2026-07-23.\n\n> **Ningun endpoint funciona todavia.** Las rutas EXISTEN (`EntryTicketRestAdapter`\n> y `ReceiptRestAdapter` estan anotados y mapeados), pero **todos los metodos\n> hacen `return null;`**. La logica esta comentada dentro del propio controlador.\n>\n> Consecuencia practica: no dan 404. Spring convierte el `null` en **200 OK con\n> cuerpo vacio**. Un test que solo mire el codigo de estado dara verde y no\n> significara nada — por eso las requests de aqui no afirman nada sobre el body.\n\nBase paths: `/v1/entry-tickets` (HU-01, ticket de entrada) y `/v1/receipts`\n(HU-02, recibo de salida, IN-22 ticket perdido).\n\nImpacto en el check-in: `StayTicketClientAdapter.issueEntryTicket` hace\n`POST /v1/entry-tickets` y espera un `EntryTicketInfo`. Como el controlador\ndevuelve null, el `entryTicket` de la respuesta del check-in llega vacio.\n",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Entry tickets (HU-01) — esqueleto",
+      "description": "",
+      "item": [
+        {
+          "name": "[STUB] Emitir ticket de entrada",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrlTicket}}/v1/entry-tickets",
+              "host": [
+                "{{baseUrlTicket}}"
+              ],
+              "path": [
+                "v1",
+                "entry-tickets"
+              ]
+            },
+            "description": "POST /v1/entry-tickets. **Devuelve 200 con cuerpo vacio** (`return null` en `createEntryTicket`).\n\nEl DTO declarado es `EntryTicketRequest(UUID stayId)` — solo `stayId`. Pero `StayTicketClientAdapter` manda ademas `plate` e `issuedAt`; hay que decidir cual es el contrato bueno antes de implementarlo.\n\nRespuesta esperada cuando exista: `EntryTicketResponse(id, stayId, code, issuedAt, status)` -> 201.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"stayId\": \"{{stayId}}\",\n  \"plate\": \"{{plate}}\",\n  \"issuedAt\": \"2026-07-23T08:00:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('el endpoint responde (aun sin implementar)', () =>",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                  "pm.test('SIGUE SIN IMPLEMENTAR: cuerpo vacio', () =>",
+                  "  pm.expect(pm.response.text()).to.be.empty);",
+                  "// Cuando este implementado, este ultimo test fallara.",
+                  "// Eso es la señal de que toca actualizar la coleccion."
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[STUB] Listar tickets de entrada",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrlTicket}}/v1/entry-tickets",
+              "host": [
+                "{{baseUrlTicket}}"
+              ],
+              "path": [
+                "v1",
+                "entry-tickets"
+              ]
+            },
+            "description": "GET /v1/entry-tickets. `return null` -> 200 con cuerpo vacio."
+          },
+          "response": []
+        },
+        {
+          "name": "[STUB] Ticket de entrada por id (codigo)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrlTicket}}/v1/entry-tickets/{{entryTicketId}}/code",
+              "host": [
+                "{{baseUrlTicket}}"
+              ],
+              "path": [
+                "v1",
+                "entry-tickets",
+                "{{entryTicketId}}",
+                "code"
+              ]
+            },
+            "description": "GET /v1/entry-tickets/{id}/code. `return null` -> 200 vacio.\n\nLa ruta no coincide con el openapi.yml, que declara `GET /v1/tickets/{id}`. Divergencia a resolver."
+          },
+          "response": []
+        },
+        {
+          "name": "[STUB] Actualizar ticket de entrada",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrlTicket}}/v1/entry-tickets/{{entryTicketId}}",
+              "host": [
+                "{{baseUrlTicket}}"
+              ],
+              "path": [
+                "v1",
+                "entry-tickets",
+                "{{entryTicketId}}"
+              ]
+            },
+            "description": "PUT /v1/entry-tickets/{id}. `return null` -> 200 vacio.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"stayId\": \"{{stayId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Receipts (HU-02) — esqueleto",
+      "description": "",
+      "item": [
+        {
+          "name": "[STUB] Crear recibo de salida",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrlTicket}}/v1/receipts",
+              "host": [
+                "{{baseUrlTicket}}"
+              ],
+              "path": [
+                "v1",
+                "receipts"
+              ]
+            },
+            "description": "POST /v1/receipts. El metodo acepta `@RequestBody Object` (sin DTO todavia) y hace `return null` -> 200 vacio.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"stayId\": \"{{stayId}}\",\n  \"amount\": 3.75\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "[STUB] Listar recibos",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrlTicket}}/v1/receipts?stayId={{stayId}}",
+              "host": [
+                "{{baseUrlTicket}}"
+              ],
+              "path": [
+                "v1",
+                "receipts"
+              ],
+              "query": [
+                {
+                  "key": "stayId",
+                  "value": "{{stayId}}",
+                  "description": "opcional"
+                }
+              ]
+            },
+            "description": "GET /v1/receipts. Acepta `stayId` opcional. `return null` -> 200 vacio."
+          },
+          "response": []
+        },
+        {
+          "name": "[STUB] Recibo por id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrlTicket}}/v1/receipts/{{entryTicketId}}",
+              "host": [
+                "{{baseUrlTicket}}"
+              ],
+              "path": [
+                "v1",
+                "receipts",
+                "{{entryTicketId}}"
+              ]
+            },
+            "description": "GET /v1/receipts/{receiptId}. `return null` -> 200 vacio."
+          },
+          "response": []
+        },
+        {
+          "name": "[STUB] Marcar recibo como perdido (IN-22)",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrlTicket}}/v1/receipts/{{entryTicketId}}/lost",
+              "host": [
+                "{{baseUrlTicket}}"
+              ],
+              "path": [
+                "v1",
+                "receipts",
+                "{{entryTicketId}}",
+                "lost"
+              ]
+            },
+            "description": "PATCH /v1/receipts/{receiptId}/lost. IN-22: aplica tarifa de penalizacion. `return null` -> 200 vacio."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Pendiente de implementar",
+      "description": "",
+      "item": [
+        {
+          "name": "[TODO] Ticket de salida",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrlTicket}}/v1/tickets/exit",
+              "host": [
+                "{{baseUrlTicket}}"
+              ],
+              "path": [
+                "v1",
+                "tickets",
+                "exit"
+              ]
+            },
+            "description": "**Esta ruta no existe en ningun controlador** -> 404.\n\nAun asi, `StayTicketClientAdapter.issueExitTicket` la llama. Es un bug conocido del check-OUT (no bloquea el check-in). Lo correcto es alinearla con `/v1/entry-tickets` o crear el recurso de salida.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"stayId\": \"{{stayId}}\",\n  \"entryTicketId\": \"{{entryTicketId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

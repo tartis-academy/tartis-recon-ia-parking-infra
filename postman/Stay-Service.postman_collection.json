@@ -1,0 +1,389 @@
+{
+  "info": {
+    "_postman_id": "c4a57a16-18ff-4e47-88b5-0165529de65c",
+    "name": "Parking · stay-service",
+    "description": "stay-service — verificado el 2026-07-23.\n\n> **Que rama necesitas:** en `origin/release123` `StayRestAdapter` esta VACIO: no\n> hay ningun endpoint y todas estas requests dan 404. El `POST /v1/stays/check-in`\n> solo existe en la rama **`feature/checkin-usecase`** (HU-01, 54/54 tests).\n> Levanta stay desde esa rama o esta coleccion no sirve de nada.\n\nEl check-in es sincrono y orquesta tres servicios:\n`vehicle` (resolver o dar de alta la matricula, RN-11) -> `spot` (ocupar plaza,\nRN-01) -> persistencia de la estancia. Con `ticket` pendiente.\n\nCodigos de la respuesta (`CustomizedExceptionAdapter`, IN-36):\n\n| Codigo | Caso | Barrera |\n|---|---|---|\n| 201 | Acceso autorizado, plaza asignada (CA3) | se abre |\n| 400 | Matricula vacia o `vehicleType` no reconocido | cerrada |\n| 409 | Parking completo (RN-01/CA-01) **o** vehiculo ya dentro (IN-02/CB-05) | cerrada |\n| 422 | Vehiculo dado de baja (RN-11) | cerrada |\n\nEl cuerpo de error es el `ErrorResponse` comun:\n`{timestamp, status, error, message, path}`.\n",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Check-in (HU-01)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrlStay}}/v1/stays/check-in",
+          "host": [
+            "{{baseUrlStay}}"
+          ],
+          "path": [
+            "v1",
+            "stays",
+            "check-in"
+          ]
+        },
+        "description": "POST /v1/stays/check-in -> 201 Created.\n\nBody (`StayRequest`):\n- `plate` — **obligatorio** (`@NotBlank`). Se normaliza en el dominio (IN-01).\n- `vehicleType` — opcional, `String`. Solo hace falta si la matricula no esta registrada todavia (auto-alta). Valores: `CAR`, `CAR_PMR`, `MOTORBIKE`; cualquier otro -> 400.\n\nRespuesta (`CheckInResponse`): `{stayId, plate, spotId, checkIn, status, entryTicket}`.\n\n> `entryTicket` llega **siempre a null**: `StayRestMapper.toCheckInResponse` lo fija a null a proposito, la emision del ticket queda fuera del alcance de HU-01.\n> `status` sera `IN_PROGRESS`.\n\n**Requiere vehicle-service y spot-service levantados**, con las URLs de `services.*.url` apuntando a ellos (ver README).",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"plate\": \"{{plate}}\",\n  \"vehicleType\": \"{{vehicleType}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('201 Created', () => pm.response.to.have.status(201));",
+              "const body = pm.response.json();",
+              "pm.environment.set('stayId', body.stayId);",
+              "pm.environment.set('spotId', body.spotId);",
+              "pm.test('devuelve stayId', () => pm.expect(body.stayId).to.be.a('string'));",
+              "pm.test('estancia en curso', () => pm.expect(body.status).to.eql('IN_PROGRESS'));",
+              "pm.test('entryTicket sigue a null (fuera del alcance de HU-01)', () =>",
+              "  pm.expect(body.entryTicket).to.be.null);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Check-in duplicado -> 409 (IN-02 / CB-05)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrlStay}}/v1/stays/check-in",
+          "host": [
+            "{{baseUrlStay}}"
+          ],
+          "path": [
+            "v1",
+            "stays",
+            "check-in"
+          ]
+        },
+        "description": "Repetir el check-in de una matricula que ya esta dentro.\n\nEspera **409 Conflict** (`DuplicateActiveStayException`). Ejecutala justo despues de un check-in correcto, con la misma `plate`.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"plate\": \"{{plate}}\",\n  \"vehicleType\": \"{{vehicleType}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('409 Conflict', () => pm.response.to.have.status(409));",
+              "const body = pm.response.json();",
+              "pm.test('cuerpo ErrorResponse', () => {",
+              "  pm.expect(body).to.have.property('timestamp');",
+              "  pm.expect(body).to.have.property('path');",
+              "  pm.expect(body.status).to.eql(409);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Check-in de vehiculo de baja -> 422 (RN-11)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrlStay}}/v1/stays/check-in",
+          "host": [
+            "{{baseUrlStay}}"
+          ],
+          "path": [
+            "v1",
+            "stays",
+            "check-in"
+          ]
+        },
+        "description": "Espera **422 Unprocessable Entity** (`VehicleDeactivatedException`).\n\nPreparacion: en la coleccion de vehicle, crea un vehiculo y llama a `PATCH /v1/vehicles/{id}/status` para darlo de baja. Luego intenta entrar con esa matricula.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"plate\": \"{{plate}}\",\n  \"vehicleType\": \"{{vehicleType}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('422 Unprocessable Entity', () => pm.response.to.have.status(422));",
+              "pm.test('status 422 en el cuerpo', () => pm.expect(pm.response.json().status).to.eql(422));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Check-in sin matricula -> 400",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrlStay}}/v1/stays/check-in",
+          "host": [
+            "{{baseUrlStay}}"
+          ],
+          "path": [
+            "v1",
+            "stays",
+            "check-in"
+          ]
+        },
+        "description": "`plate` vacia -> **400 Bad Request** por `@NotBlank` (`MethodArgumentNotValidException`).\n\nEl mensaje viene como `campo: motivo`, p. ej. `plate: La matricula es obligatoria`.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"plate\": \"\",\n  \"vehicleType\": \"CAR\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+              "pm.test('menciona el campo plate', () => pm.expect(pm.response.json().message).to.include('plate'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Check-in con tipo invalido -> 400",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrlStay}}/v1/stays/check-in",
+          "host": [
+            "{{baseUrlStay}}"
+          ],
+          "path": [
+            "v1",
+            "stays",
+            "check-in"
+          ]
+        },
+        "description": "`vehicleType` presente pero no reconocido -> **400** (`InvalidStayException` lanzada por `StayRestMapper.parseVehicleType`).\n\nUn tipo ausente o vacio NO es error: se resuelve desde vehicle-service.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"plate\": \"{{plate}}\",\n  \"vehicleType\": \"CAMION\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+              "pm.test('dice que el tipo no se reconoce', () => pm.expect(pm.response.json().message).to.include('Tipo de vehiculo'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrlStay}}/actuator/health",
+          "host": [
+            "{{baseUrlStay}}"
+          ],
+          "path": [
+            "actuator",
+            "health"
+          ]
+        },
+        "description": "Comprobacion rapida de que el servicio esta arriba. `management.endpoints.web.exposure.include=health` (comun a los 5)."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "pm.test('UP', () => pm.expect(pm.response.json().status).to.eql('UP'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Pendiente de implementar",
+      "description": "Rutas del openapi.yml de stay que todavia no tienen metodo en `StayRestAdapter`. Todas dan 404.",
+      "item": [
+        {
+          "name": "[TODO] Check-out (HU-02)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrlStay}}/v1/stays/check-out",
+              "host": [
+                "{{baseUrlStay}}"
+              ],
+              "path": [
+                "v1",
+                "stays",
+                "check-out"
+              ]
+            },
+            "description": "Declarado en el openapi.yml, sin metodo en `StayRestAdapter` -> 404.\n\nBloqueado por dos cosas: `POST /v1/tariffs/calculate` no existe en tariff-service, y `issueExitTicket` apunta a una ruta inexistente (`/v1/tickets/exit`).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"plate\": \"{{plate}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "[TODO] Cancelar estancia",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrlStay}}/v1/stays/{{stayId}}/cancel",
+              "host": [
+                "{{baseUrlStay}}"
+              ],
+              "path": [
+                "v1",
+                "stays",
+                "{{stayId}}",
+                "cancel"
+              ]
+            },
+            "description": "Declarado en el contrato -> 404. El dominio ya tiene `Stay.cancel()`; falta el caso de uso y el endpoint."
+          },
+          "response": []
+        },
+        {
+          "name": "[TODO] Obtener estancia por id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrlStay}}/v1/stays/{{stayId}}",
+              "host": [
+                "{{baseUrlStay}}"
+              ],
+              "path": [
+                "v1",
+                "stays",
+                "{{stayId}}"
+              ]
+            },
+            "description": "Declarado en el contrato -> 404. Existe `GetStayUseCase`, pero no hay metodo en el controlador."
+          },
+          "response": []
+        },
+        {
+          "name": "[TODO] Listar estancias",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrlStay}}/v1/stays?status=IN_PROGRESS",
+              "host": [
+                "{{baseUrlStay}}"
+              ],
+              "path": [
+                "v1",
+                "stays"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "IN_PROGRESS",
+                  "description": "IN_PROGRESS | PAY_PENDING | PAID | FINISHED | CANCELLED"
+                }
+              ]
+            },
+            "description": "Declarado en el contrato -> 404."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

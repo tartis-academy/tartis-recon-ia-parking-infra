@@ -1,0 +1,571 @@
+{
+  "info": {
+    "_postman_id": "bcf49b44-1e55-4ad6-8e03-a262daca2184",
+    "name": "Parking · E2E check-in",
+    "description": "Flujo de entrada al parking, de principio a fin.\n\nTiene dos carpetas que hacen **lo mismo por dos caminos distintos**:\n\n1. **Simulacion manual** — encadena a mano las llamadas a vehicle, tariff, spot y\n   ticket. Funciona hoy. **No es una prueba del sistema**: nadie orquesta nada, lo\n   orquesta Postman. Es un sustituto temporal, dicho en voz alta.\n2. **Check-in real** — una sola llamada a `POST /v1/stays/check-in`. Es la que\n   cuenta. Requiere stay levantado desde `feature/checkin-usecase` y arrastra los\n   bugs listados en el README.\n\nEl dia que el check-in real funcione E2E, la carpeta 1 se borra.\n\nEjecutalas en orden con el Collection Runner y el environment\n'Parking - Local (dev)' seleccionado.\n",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Simulacion manual (sustituto temporal)",
+      "description": "Encadena servicios a mano porque la orquestacion todavia no existe en codigo. Util para probar cada pieza; NO demuestra que el sistema funcione.",
+      "item": [
+        {
+          "name": "Preparar: crear tarifa activa",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrlTariff}}/v1/tariffs",
+              "host": [
+                "{{baseUrlTariff}}"
+              ],
+              "path": [
+                "v1",
+                "tariffs"
+              ]
+            },
+            "description": "Sin tarifa activa para el tipo de vehiculo no hay importe que aplicar. En el flujo real la resolveria stay via `StayTariffPort`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"E2E - tarifa coche\",\n  \"type\": \"{{vehicleType}}\",\n  \"pricePerMinute\": 0.05,\n  \"basePrice\": 1.0,\n  \"active\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "pm.environment.set('tariffId', pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Preparar: crear plaza libre",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrlSpot}}/v1/spots",
+              "host": [
+                "{{baseUrlSpot}}"
+              ],
+              "path": [
+                "v1",
+                "spots"
+              ]
+            },
+            "description": "Necesitamos al menos una plaza AVAILABLE del tipo correcto, o el paso de ocupar fallara por RN-01.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"{{vehicleType}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "pm.environment.set('spotId', pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Paso 1 - Dar de alta el vehiculo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrlVehicle}}/v1/vehicles",
+              "host": [
+                "{{baseUrlVehicle}}"
+              ],
+              "path": [
+                "v1",
+                "vehicles"
+              ]
+            },
+            "description": "Equivale al `getOrCreateVehicle` de `StayVehiclePort`: si la matricula no existe, se crea.\n\nGenera una matricula aleatoria para poder reejecutar el flujo.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"{{vehicleType}}\",\n  \"plate\": \"{{plate}}\",\n  \"brand\": \"Seat\",\n  \"model\": \"Ibiza\",\n  \"color\": \"Blanco\",\n  \"numDoors\": 5,\n  \"hasSidecar\": false,\n  \"active\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const digits = String(Math.floor(1000 + Math.random() * 9000));",
+                  "const abc = 'BCDFGHJKLMNPRSTVWXYZ';",
+                  "let letters = '';",
+                  "for (let i = 0; i < 3; i++) {",
+                  "  letters += abc.charAt(Math.floor(Math.random() * abc.length));",
+                  "}",
+                  "pm.environment.set('plate', digits + letters);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.environment.set('vehicleId', body.uniqueId);",
+                  "pm.test('activo (RN-11 lo dejaria pasar)', () => pm.expect(body.active).to.be.true);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Paso 2 - Comprobar RN-11 (vehiculo activo)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrlVehicle}}/v1/vehicles/plate/{{plate}}",
+              "host": [
+                "{{baseUrlVehicle}}"
+              ],
+              "path": [
+                "v1",
+                "vehicles",
+                "plate",
+                "{{plate}}"
+              ]
+            },
+            "description": "RN-11: un vehiculo desactivado no puede entrar. En el flujo real esta comprobacion vive dentro del `CheckInUseCase`; aqui la hacemos a mano."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('RN-11: el vehiculo esta activo', () =>",
+                  "  pm.expect(pm.response.json().active).to.be.true);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Paso 3 - Resolver la tarifa aplicable",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrlTariff}}/v1/tariffs/active?type=CAR",
+              "host": [
+                "{{baseUrlTariff}}"
+              ],
+              "path": [
+                "v1",
+                "tariffs",
+                "active"
+              ],
+              "query": [
+                {
+                  "key": "type",
+                  "value": "{{vehicleType}}",
+                  "description": "tipo de vehiculo"
+                }
+              ]
+            },
+            "description": "Lo que hara `StayTariffPort` cuando el adaptador real sustituya al `StubStayTariffAdapter` (que hoy devuelve un id fijo)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('hay al menos una tarifa activa', () => pm.expect(body.length).to.be.above(0));",
+                  "if (body.length > 0) pm.environment.set('tariffId', body[0].id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Paso 4 - Ocupar plaza (RN-01)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrlSpot}}/v1/spots/occupy",
+              "host": [
+                "{{baseUrlSpot}}"
+              ],
+              "path": [
+                "v1",
+                "spots",
+                "occupy"
+              ]
+            },
+            "description": "El corazon del check-in. Si no hay plaza libre del tipo pedido, aqui salta **RN-01 (parking completo)**.\n\nRecuerda: el body es `{\"type\": ...}`, y el verbo es **POST** (el adaptador de stay usa PATCH por error).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"{{vehicleType}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.environment.set('spotId', body.id);",
+                  "pm.test('plaza ocupada', () => pm.expect(body.status).to.eql('OCCUPIED'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Paso 5 - [STUB] Emitir ticket de entrada",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrlTicket}}/v1/entry-tickets",
+              "host": [
+                "{{baseUrlTicket}}"
+              ],
+              "path": [
+                "v1",
+                "entry-tickets"
+              ]
+            },
+            "description": "Ultimo paso del check-in real. **Hoy no hace nada**: `createEntryTicket` es `return null` -> 200 con cuerpo vacio.\n\nNo cortes el flujo por esto; simplemente el conductor se queda sin ticket impreso.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"stayId\": \"{{stayId}}\",\n  \"plate\": \"{{plate}}\",\n  \"issuedAt\": \"2026-07-23T08:00:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('el endpoint responde', () =>",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                  "if (!pm.response.text()) {",
+                  "  console.log('ticket-service sigue sin implementar: cuerpo vacio');",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Limpieza - Liberar la plaza",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrlSpot}}/v1/spots/{{spotId}}/release",
+              "host": [
+                "{{baseUrlSpot}}"
+              ],
+              "path": [
+                "v1",
+                "spots",
+                "{{spotId}}",
+                "release"
+              ]
+            },
+            "description": "Deja el parking como estaba para poder reejecutar la coleccion. En el flujo real esto es la salida (HU-02) o la compensacion IN-25."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('plaza libre otra vez', () => pm.expect(pm.response.json().status).to.eql('AVAILABLE'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. Check-in real (una sola llamada)",
+      "description": "El flujo tal y como debe quedar. Requiere la rama feature/checkin-usecase.",
+      "item": [
+        {
+          "name": "Preparar: plaza libre",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrlSpot}}/v1/spots",
+              "host": [
+                "{{baseUrlSpot}}"
+              ],
+              "path": [
+                "v1",
+                "spots"
+              ]
+            },
+            "description": "Una plaza AVAILABLE para que el check-in tenga donde meter el coche.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"{{vehicleType}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "pm.environment.set('spotId', pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Check-in",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrlStay}}/v1/stays/check-in",
+              "host": [
+                "{{baseUrlStay}}"
+              ],
+              "path": [
+                "v1",
+                "stays",
+                "check-in"
+              ]
+            },
+            "description": "**Esto sustituye a los 5 pasos de la carpeta 1.** Una peticion: stay resuelve el vehiculo, aplica RN-11 y CB-05, ocupa plaza (RN-01), crea la estancia y compensa si algo falla (IN-25).\n\nRequisitos: stay levantado desde `feature/checkin-usecase`, con vehicle y spot arriba y `services.vehicle.url` / `services.spot.url` apuntando a ellos.\n\n> **Hoy esto falla** por el `.patch()` de `StaySpotClientAdapter` (spot expone POST /occupy -> 405) y porque el auto-alta del vehiculo no manda `active`, que vehicle exige. Ver README.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"plate\": \"{{plate}}\",\n  \"vehicleType\": \"{{vehicleType}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const digits = String(Math.floor(1000 + Math.random() * 9000));",
+                  "const abc = 'BCDFGHJKLMNPRSTVWXYZ';",
+                  "let letters = '';",
+                  "for (let i = 0; i < 3; i++) {",
+                  "  letters += abc.charAt(Math.floor(Math.random() * abc.length));",
+                  "}",
+                  "pm.environment.set('plate', digits + letters);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created — barrera abierta', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.environment.set('stayId', body.stayId);",
+                  "pm.environment.set('spotId', body.spotId);",
+                  "pm.test('estancia creada', () => {",
+                  "  pm.expect(body.stayId).to.be.a('string');",
+                  "  pm.expect(body.spotId).to.be.a('string');",
+                  "  pm.expect(body.status).to.eql('IN_PROGRESS');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verificar: la plaza quedo ocupada",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrlSpot}}/v1/spots/{{spotId}}",
+              "host": [
+                "{{baseUrlSpot}}"
+              ],
+              "path": [
+                "v1",
+                "spots",
+                "{{spotId}}"
+              ]
+            },
+            "description": "La prueba de que el check-in llego de verdad hasta spot-service: la plaza que devolvio el check-in tiene que estar en `OCCUPIED`.\n\nSi esta `AVAILABLE`, la llamada saliente de stay no funciono."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('la plaza del check-in esta OCCUPIED', () =>",
+                  "  pm.expect(pm.response.json().status).to.eql('OCCUPIED'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verificar: reentrar da 409 (CB-05)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrlStay}}/v1/stays/check-in",
+              "host": [
+                "{{baseUrlStay}}"
+              ],
+              "path": [
+                "v1",
+                "stays",
+                "check-in"
+              ]
+            },
+            "description": "Misma matricula, segunda vez: **409**. Es la prueba de IN-02/CB-05 (un vehiculo no puede estar dentro dos veces).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"plate\": \"{{plate}}\",\n  \"vehicleType\": \"{{vehicleType}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409 Conflict', () => pm.response.to.have.status(409));",
+                  "pm.test('la barrera sigue cerrada (no se creo estancia)', () =>",
+                  "  pm.expect(pm.response.json().status).to.eql(409));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

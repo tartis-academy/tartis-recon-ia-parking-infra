@@ -61,6 +61,19 @@ schema (`search_path` o equivalente). Para el perfil `prod` / servicio
 aislado, cada servicio usa su propio Postgres dedicado (ver el repo de ese
 servicio).
 
+## Probar los servicios
+
+En `postman/` están las colecciones para probar los cinco microservicios contra
+este entorno: una por servicio, una E2E con el flujo de entrada completo y un
+environment con las cinco `baseUrl` ya configuradas.
+
+Además de suite de pruebas sirven de checklist contrato-vs-implementación: cada
+request lleva en el nombre el estado real del endpoint en el código
+(`[TODO]` = no hay controlador, `[STUB]` = mapeado pero devuelve vacío).
+
+Cómo importarlas, en qué orden ejecutarlas y qué fallos son esperados:
+[`postman/README.md`](postman/README.md).
+
 ## Problemas frecuentes
 
 `network parking-shared ... not found` → te falta el primer comando.
