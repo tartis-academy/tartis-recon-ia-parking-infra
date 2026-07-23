@@ -181,39 +181,34 @@ Cuerpo de error común a todos los servicios:
 Ninguno de estos es un fallo de la colección. Están anotados también en la
 request correspondiente.
 
-1. **El check-in no ocupa plaza nunca.**
-   `StaySpotClientAdapter.occupySpot` llama con `.patch()` a `/v1/spots/occupy`,
-   pero spot expone `@PostMapping("/occupy")` → **405**. Un cambio de verbo; la
-   ruta ya está bien.
-
-2. **El auto-alta de vehículo devuelve 400.**
+1.  **El auto-alta de vehículo devuelve 400.**
    Cuando la matrícula no existe, `StayVehicleClientAdapter` hace
    `POST /v1/vehicles` con `{plate, type}`. Pero `VehicleRequest` exige además
    `active` (`@NotNull`) → 400. El check-in de una matrícula nueva no puede
    funcionar hasta que se mande `active: true` o se relaje la validación.
 
-3. **`PATCH /v1/spots/{id}/status` no cambia el estado.**
+2. **`PATCH /v1/spots/{id}/status` no cambia el estado.**
    Recibe `SpotRequest` (campo `type`) y delega en `UpdateSpotUseCase`: cambia el
    *tipo* de la plaza. No hay forma por REST de poner una plaza en `UNAVAILABLE`.
 
-4. **`PATCH /v1/vehicles/{id}/status` ignora el body.**
+3. **`PATCH /v1/vehicles/{id}/status` ignora el body.**
    Siempre desactiva y devuelve 204. No se puede reactivar un vehículo por REST.
 
-5. **RN-01 no se puede mapear a 409 todavía.**
+4. **RN-01 no se puede mapear a 409 todavía.**
    Cuando spot responde 409 (parking completo), `occupySpot` deja escapar un
    `HttpClientErrorException` / `IllegalStateException` en vez de lanzar
    `NoAvailableSpotException`. Hasta que lo lance, el `CheckInUseCase` no puede
    traducirlo al 409 del contrato.
 
-6. **`POST /v1/tickets/exit` no existe.**
+5. **`POST /v1/tickets/exit` no existe.**
    `StayTicketClientAdapter.issueExitTicket` la llama; ticket-service usa
    `/v1/entry-tickets`. Es del check-out, no bloquea el check-in.
 
-7. **Sin timeouts en las llamadas salientes de stay.**
+6. **Sin timeouts en las llamadas salientes de stay.**
    El `RestClient.Builder` compartido no fija connect/read timeout. Si spot se
    cuelga, el tótem agota hilos en vez de denegar el acceso.
 
-8. **`SpotOccupyRequest` / `SpotOccupyResponse` son código muerto.**
+7. **`SpotOccupyRequest` / `SpotOccupyResponse` son código muerto.**
    Ningún endpoint los usa. El contrato real de `/occupy` es `SpotRequest` in,
    `SpotResponse` out. No te guíes por esas clases.
 
