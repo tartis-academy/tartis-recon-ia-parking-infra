@@ -27,8 +27,8 @@ el código, y la divergencia queda anotada en la descripción de cada request.
    SERVER_PORT=8083 ./mvnw spring-boot:run   # ticket
    ```
 
-   `stay` necesita además las URLs de los demás y la rama
-   `feature/checkin-usecase` — ver [Stay necesita saber dónde están los
+   `stay` necesita además las URLs de los demás (levántalo desde `release` o
+   `release123`) — ver [Stay necesita saber dónde están los
    demás](#stay-necesita-saber-dónde-están-los-demás).
 
 3. **Importa** en Postman: **Import → Files** → los 7 ficheros de esta carpeta
@@ -45,7 +45,7 @@ el código, y la divergencia queda anotada en la descripción de cada request.
    | 2 | Spot | Todo verde |
    | 3 | Tariff | Todo verde |
    | 4 | Ticket | 200 con **cuerpo vacío** — es un esqueleto, ver `[STUB]` |
-   | 5 | Stay | Solo el check-in, y solo desde `feature/checkin-usecase` |
+   | 5 | Stay | Solo el check-in — ya mergeado en `release` / `release123` |
    | 6 | Parking · E2E | El flujo de entrada completo |
 
    Dentro de cada colección, ejecuta de arriba abajo (o con el **Collection
@@ -82,7 +82,7 @@ newman run Vehicle-Service.postman_collection.json \
 | `Spot-Service.postman_collection.json` | Plazas: CRUD + ocupar/liberar — **todo implementado** |
 | `Tariff-Service.postman_collection.json` | Tarifas: CRUD + activas + estado — **todo implementado** |
 | `Ticket-Service.postman_collection.json` | Tickets y recibos — **esqueleto, ningún método hace nada** |
-| `Stay-Service.postman_collection.json` | Check-in (HU-01) — **solo en la rama `feature/checkin-usecase`** |
+| `Stay-Service.postman_collection.json` | Check-in (HU-01) — **ya en `release` / `release123`** |
 | `Parking-E2E.postman_collection.json` | El flujo de entrada completo, por los dos caminos |
 
 ## Importar
@@ -133,9 +133,10 @@ SERVICES_TICKET_URL=http://localhost:8083 \
 
 ### Rama de stay
 
-En `release123` el `StayRestAdapter` de stay está **vacío**: no existe ningún
-endpoint y toda la colección de stay da 404. El `POST /v1/stays/check-in` solo
-está en **`feature/checkin-usecase`**. Levanta stay desde esa rama.
+El `POST /v1/stays/check-in` ya está mergeado en **`release`** y **`release123`**
+(PR #27, HU-01), con la orquestación real a vehicle → spot → tariff. Levanta stay
+desde cualquiera de esas dos ramas. En **`main`** el `StayRestAdapter` sigue
+**vacío**: ahí toda la colección de stay da 404.
 
 ---
 
