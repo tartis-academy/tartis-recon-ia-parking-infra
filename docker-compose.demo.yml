@@ -10,6 +10,10 @@
 # Sin Flyway/Liquibase todavia: cada Postgres arranca con el schema.sql del
 # propio repo del servicio (backend/<servicio>/db/schema.sql) como init
 # script, para que el perfil prod (ddl-auto=validate) encuentre las tablas.
+#
+# Puertos de host 8080-8084 alineados con el environment de Postman
+# "Parking - Local (dev)" (postman/Parking-Local.postman_environment.json):
+# las colecciones existentes funcionan contra este stack sin tocarlas.
 
 services:
 
@@ -46,6 +50,8 @@ services:
       VEHICLE_DB_NAME: ${VEHICLE_DB_NAME}
       VEHICLE_DB_USER: ${VEHICLE_DB_USER}
       VEHICLE_DB_PASSWORD: ${VEHICLE_DB_PASSWORD}
+    ports:
+      - "${VEHICLE_PORT:-8080}:8080"
     depends_on:
       vehicle-db:
         condition: service_healthy
@@ -91,6 +97,8 @@ services:
       SPOT_DB_NAME: ${SPOT_DB_NAME}
       SPOT_DB_USER: ${SPOT_DB_USER}
       SPOT_DB_PASSWORD: ${SPOT_DB_PASSWORD}
+    ports:
+      - "${SPOT_PORT:-8081}:8080"
     depends_on:
       spot-db:
         condition: service_healthy
@@ -136,6 +144,8 @@ services:
       TARIFF_DB_NAME: ${TARIFF_DB_NAME}
       TARIFF_DB_USER: ${TARIFF_DB_USER}
       TARIFF_DB_PASSWORD: ${TARIFF_DB_PASSWORD}
+    ports:
+      - "${TARIFF_PORT:-8082}:8080"
     depends_on:
       tariff-db:
         condition: service_healthy
@@ -181,6 +191,8 @@ services:
       TICKET_DB_NAME: ${TICKET_DB_NAME}
       TICKET_DB_USER: ${TICKET_DB_USER}
       TICKET_DB_PASSWORD: ${TICKET_DB_PASSWORD}
+    ports:
+      - "${TICKET_PORT:-8083}:8080"
     depends_on:
       ticket-db:
         condition: service_healthy
@@ -229,6 +241,8 @@ services:
       # Orquestacion: los defaults de application.properties ya apuntan a
       # estos hostnames de Docker (spot-service:8080, etc.), no hace falta
       # sobreescribirlos aqui.
+    ports:
+      - "${STAY_PORT:-8084}:8080"
     depends_on:
       stay-db:
         condition: service_healthy
@@ -255,7 +269,7 @@ services:
     container_name: parking-frontend
     restart: unless-stopped
     ports:
-      - "${FRONTEND_PORT:-8081}:80"
+      - "${FRONTEND_PORT:-8090}:80"
     depends_on:
       - vehicle-service
       - spot-service
