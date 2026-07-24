@@ -566,6 +566,248 @@
           ]
         }
       ]
+    },
+    {
+      "name": "3. Checkout real (una sola llamada)",
+      "description": "Cierre de la estancia abierta en la carpeta 2. Requiere el fix de contrato stay<->tariff y stay<->ticket (PRs #35 de stay-service y #40 de ticket-service, ya en release).",
+      "item": [
+        {
+          "name": "Preparar: plaza libre",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrlSpot}}/v1/spots",
+              "host": [
+                "{{baseUrlSpot}}"
+              ],
+              "path": [
+                "v1",
+                "spots"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"{{vehicleType}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Una plaza AVAILABLE para el check-in previo al checkout."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "pm.environment.set('spotId', pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Preparar: check-in",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrlStay}}/v1/stays/check-in",
+              "host": [
+                "{{baseUrlStay}}"
+              ],
+              "path": [
+                "v1",
+                "stays",
+                "check-in"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"plate\": \"{{plate}}\",\n  \"vehicleType\": \"{{vehicleType}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Abre la estancia que vamos a cerrar a continuacion. Matricula nueva en cada corrida (prerequest)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const digits = String(Math.floor(1000 + Math.random() * 9000));",
+                  "const abc = 'BCDFGHJKLMNPRSTVWXYZ';",
+                  "let letters = '';",
+                  "for (let i = 0; i < 3; i++) {",
+                  "  letters += abc.charAt(Math.floor(Math.random() * abc.length));",
+                  "}",
+                  "pm.environment.set('plate', digits + letters);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.environment.set('stayId', body.stayId);",
+                  "pm.environment.set('spotId', body.spotId);",
+                  "pm.test('estancia en curso', () => pm.expect(body.status).to.eql('IN_PROGRESS'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Checkout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrlStay}}/v1/stays/check-out",
+              "host": [
+                "{{baseUrlStay}}"
+              ],
+              "path": [
+                "v1",
+                "stays",
+                "check-out"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"plate\": \"{{plate}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Cierra la estancia: calcula el importe contra tariff-service (POST /v1/tariffs/calculate), emite el ticket de salida contra ticket-service (POST /v1/tickets) y libera la plaza.\n\nSin las PRs #35/#40 mergeadas esto da 500 (contrato roto stay<->tariff y stay<->ticket, y un bean fantasma en ticket-service)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.environment.set('ticketId', body.ticketId);",
+                  "pm.test('estancia FINISHED', () => pm.expect(body.status).to.eql('FINISHED'));",
+                  "pm.test('importe calculado (> 0)', () => pm.expect(body.amount).to.be.above(0));",
+                  "pm.test('ticket de salida emitido', () => pm.expect(body.ticketId).to.be.a('string'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verificar: la plaza quedo libre otra vez",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrlSpot}}/v1/spots/{{spotId}}",
+              "host": [
+                "{{baseUrlSpot}}"
+              ],
+              "path": [
+                "v1",
+                "spots",
+                "{{spotId}}"
+              ]
+            },
+            "description": "Prueba de que el checkout libero la plaza de verdad: tiene que volver a AVAILABLE."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('la plaza volvio a AVAILABLE', () => pm.expect(pm.response.json().status).to.eql('AVAILABLE'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verificar: checkout de nuevo da 404",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrlStay}}/v1/stays/check-out",
+              "host": [
+                "{{baseUrlStay}}"
+              ],
+              "path": [
+                "v1",
+                "stays",
+                "check-out"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"plate\": \"{{plate}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "La estancia ya esta FINISHED: repetir el checkout no debe encontrar ninguna en curso."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404 Not Found', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
     }
   ]
 }
