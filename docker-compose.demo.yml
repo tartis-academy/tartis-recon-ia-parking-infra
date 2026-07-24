@@ -1,0 +1,276 @@
+# Stack de DEMO: los 5 microservicios (perfil prod, database-per-service real)
+# + el frontend, cada uno con su propia Postgres. Asume los 6 repos clonados
+# como hermanos en el mismo directorio padre (convencion del proyecto).
+#
+# Uso:
+#   cp .env.demo.example .env.demo
+#   docker network create parking-shared   # si no existe ya
+#   docker compose -f docker-compose.demo.yml --env-file .env.demo up --build
+#
+# Sin Flyway/Liquibase todavia: cada Postgres arranca con el schema.sql del
+# propio repo del servicio (backend/<servicio>/db/schema.sql) como init
+# script, para que el perfil prod (ddl-auto=validate) encuentre las tablas.
+
+services:
+
+  vehicle-db:
+    image: postgres:15.18-alpine
+    container_name: parking-vehicle-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${VEHICLE_DB_USER}
+      POSTGRES_PASSWORD: ${VEHICLE_DB_PASSWORD}
+      POSTGRES_DB: ${VEHICLE_DB_NAME}
+    ports:
+      - "${VEHICLE_DB_PORT:-5433}:5432"
+    volumes:
+      - parking-vehicle-db-data:/var/lib/postgresql/data
+      - ../tartis-recon-ai-parking-vehicleService/backend/vehicle-service/db/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${VEHICLE_DB_USER} -d ${VEHICLE_DB_NAME}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - parking-shared
+
+  vehicle-service:
+    build:
+      context: ../tartis-recon-ai-parking-vehicleService/backend/vehicle-service
+    container_name: parking-vehicle-service
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      VEHICLE_DB_HOST: vehicle-db
+      VEHICLE_DB_PORT: 5432
+      VEHICLE_DB_NAME: ${VEHICLE_DB_NAME}
+      VEHICLE_DB_USER: ${VEHICLE_DB_USER}
+      VEHICLE_DB_PASSWORD: ${VEHICLE_DB_PASSWORD}
+    depends_on:
+      vehicle-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q '\"status\":\"UP\"' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - parking-shared
+
+  spot-db:
+    image: postgres:15.18-alpine
+    container_name: parking-spot-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${SPOT_DB_USER}
+      POSTGRES_PASSWORD: ${SPOT_DB_PASSWORD}
+      POSTGRES_DB: ${SPOT_DB_NAME}
+    ports:
+      - "${SPOT_DB_PORT:-5434}:5432"
+    volumes:
+      - parking-spot-db-data:/var/lib/postgresql/data
+      - ../tartis-recon-ai-parking-spotService/backend/spot-service/db/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${SPOT_DB_USER} -d ${SPOT_DB_NAME}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - parking-shared
+
+  spot-service:
+    build:
+      context: ../tartis-recon-ai-parking-spotService/backend/spot-service
+    container_name: parking-spot-service
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SPOT_DB_HOST: spot-db
+      SPOT_DB_PORT: 5432
+      SPOT_DB_NAME: ${SPOT_DB_NAME}
+      SPOT_DB_USER: ${SPOT_DB_USER}
+      SPOT_DB_PASSWORD: ${SPOT_DB_PASSWORD}
+    depends_on:
+      spot-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q '\"status\":\"UP\"' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - parking-shared
+
+  tariff-db:
+    image: postgres:15.18-alpine
+    container_name: parking-tariff-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${TARIFF_DB_USER}
+      POSTGRES_PASSWORD: ${TARIFF_DB_PASSWORD}
+      POSTGRES_DB: ${TARIFF_DB_NAME}
+    ports:
+      - "${TARIFF_DB_PORT:-5435}:5432"
+    volumes:
+      - parking-tariff-db-data:/var/lib/postgresql/data
+      - ../tartis-recon-ai-parking-tariffService/backend/tariff-service/db/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${TARIFF_DB_USER} -d ${TARIFF_DB_NAME}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - parking-shared
+
+  tariff-service:
+    build:
+      context: ../tartis-recon-ai-parking-tariffService/backend/tariff-service
+    container_name: parking-tariff-service
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      TARIFF_DB_HOST: tariff-db
+      TARIFF_DB_PORT: 5432
+      TARIFF_DB_NAME: ${TARIFF_DB_NAME}
+      TARIFF_DB_USER: ${TARIFF_DB_USER}
+      TARIFF_DB_PASSWORD: ${TARIFF_DB_PASSWORD}
+    depends_on:
+      tariff-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q '\"status\":\"UP\"' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - parking-shared
+
+  ticket-db:
+    image: postgres:15.18-alpine
+    container_name: parking-ticket-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${TICKET_DB_USER}
+      POSTGRES_PASSWORD: ${TICKET_DB_PASSWORD}
+      POSTGRES_DB: ${TICKET_DB_NAME}
+    ports:
+      - "${TICKET_DB_PORT:-5436}:5432"
+    volumes:
+      - parking-ticket-db-data:/var/lib/postgresql/data
+      - ../tartis-recon-ai-parking-ticketService/backend/ticket-service/db/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${TICKET_DB_USER} -d ${TICKET_DB_NAME}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - parking-shared
+
+  ticket-service:
+    build:
+      context: ../tartis-recon-ai-parking-ticketService/backend/ticket-service
+    container_name: parking-ticket-service
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      TICKET_DB_HOST: ticket-db
+      TICKET_DB_PORT: 5432
+      TICKET_DB_NAME: ${TICKET_DB_NAME}
+      TICKET_DB_USER: ${TICKET_DB_USER}
+      TICKET_DB_PASSWORD: ${TICKET_DB_PASSWORD}
+    depends_on:
+      ticket-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q '\"status\":\"UP\"' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - parking-shared
+
+  stay-db:
+    image: postgres:15.18-alpine
+    container_name: parking-stay-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${STAY_DB_USER}
+      POSTGRES_PASSWORD: ${STAY_DB_PASSWORD}
+      POSTGRES_DB: ${STAY_DB_NAME}
+    ports:
+      - "${STAY_DB_PORT:-5437}:5432"
+    volumes:
+      - parking-stay-db-data:/var/lib/postgresql/data
+      - ../tartis-recon-ai-parking-stayService/backend/stay-service/db/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${STAY_DB_USER} -d ${STAY_DB_NAME}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - parking-shared
+
+  stay-service:
+    build:
+      context: ../tartis-recon-ai-parking-stayService/backend/stay-service
+    container_name: parking-stay-service
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      STAY_DB_HOST: stay-db
+      STAY_DB_PORT: 5432
+      STAY_DB_NAME: ${STAY_DB_NAME}
+      STAY_DB_USER: ${STAY_DB_USER}
+      STAY_DB_PASSWORD: ${STAY_DB_PASSWORD}
+      # Orquestacion: los defaults de application.properties ya apuntan a
+      # estos hostnames de Docker (spot-service:8080, etc.), no hace falta
+      # sobreescribirlos aqui.
+    depends_on:
+      stay-db:
+        condition: service_healthy
+      vehicle-service:
+        condition: service_healthy
+      spot-service:
+        condition: service_healthy
+      tariff-service:
+        condition: service_healthy
+      ticket-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q '\"status\":\"UP\"' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - parking-shared
+
+  frontend:
+    build:
+      context: ../tartis-recon-ai-parking-frontend/tartis-recon-ai-frontend
+    container_name: parking-frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-8081}:80"
+    depends_on:
+      - vehicle-service
+      - spot-service
+      - tariff-service
+      - stay-service
+    networks:
+      - parking-shared
+
+volumes:
+  parking-vehicle-db-data:
+  parking-spot-db-data:
+  parking-tariff-db-data:
+  parking-ticket-db-data:
+  parking-stay-db-data:
+
+networks:
+  parking-shared:
+    external: true
