@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "3ff22083-135a-4fb7-9eec-50e343d55c86",
     "name": "Parking · spot-service",
-    "description": "spot-service — verificado contra `origin/release123` el 2026-07-23.\n\nTodos los endpoints de `SpotRestAdapter` estan implementados. Base path `/v1/spots`.\n\nTipos validos de `type`: `CAR`, `CAR_PMR`, `MOTORBIKE`.\nEstados de `status` en la respuesta: `AVAILABLE`, `OCCUPIED`, `UNAVAILABLE`.\n\nAvisos sobre el contrato:\n- `PATCH /{id}/status` **no cambia el estado**: recibe `SpotRequest` (campo\n  `type`) y delega en `UpdateSpotUseCase`, o sea que actualiza el TIPO. El nombre\n  de la ruta engaña. Para liberar una plaza usa `POST /{id}/release`.\n- `POST /occupy` recibe `SpotRequest` (`{\"type\": ...}`) y devuelve `SpotResponse`\n  (`id`/`type`/`status`). Las clases `SpotOccupyRequest` (`vehicleType`) y\n  `SpotOccupyResponse` (`spotId`/`numSpot`) existen en el repo pero **no las usa\n  ningun endpoint**: son codigo muerto, no el contrato real.\n- `GET /v1/spots/availability` del openapi.yml no existe.\n",
+    "description": "spot-service — verificado contra `release` el 2026-07-27.\n\nTodos los endpoints de `SpotRestAdapter` estan implementados. Base path `/v1/spots`.\n\nTipos validos de `type`: `CAR`, `CAR_PMR`, `MOTORBIKE`.\nEstados de `status` en la respuesta: `AVAILABLE`, `OCCUPIED`, `UNAVAILABLE`.\n\nAvisos sobre el contrato:\n- `PATCH /{id}/status` **no cambia el estado**: recibe `SpotRequest` (campo\n  `type`) y delega en `UpdateSpotUseCase`, o sea que actualiza el TIPO. El nombre\n  de la ruta engaña. Para liberar una plaza usa `POST /{id}/release`.\n- `POST /occupy` recibe `SpotRequest` (`{\"type\": ...}`) y devuelve `SpotResponse`\n  (`id`/`type`/`status`). Las clases `SpotOccupyRequest` (`vehicleType`) y\n  `SpotOccupyResponse` (`spotId`/`numSpot`) existen en el repo pero **no las usa\n  ningun endpoint**: son codigo muerto, no el contrato real.\n- `GET /v1/spots/availability` del openapi.yml no existe.\n",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -243,7 +243,7 @@
       ]
     },
     {
-      "name": "PATCH /status (OJO: cambia el TIPO, no el estado)",
+      "name": "Marcar plaza como UNAVAILABLE (HU-05 CA5)",
       "request": {
         "method": "PATCH",
         "header": [
@@ -264,10 +264,10 @@
             "status"
           ]
         },
-        "description": "PATCH /v1/spots/{id}/status -> 200.\n\n**El nombre miente.** Recibe `SpotRequest` (`{\"type\": ...}`) y llama a `UpdateSpotUseCase`, exactamente igual que el PUT: cambia el TIPO de la plaza, no su `status`. No hay forma por REST de poner una plaza en `UNAVAILABLE`.\n\nSe deja en la coleccion porque `StaySpotClientAdapter.updateSpotStatus` la llama tal cual.",
+        "description": "`PATCH /v1/spots/{id}/status` -> 200. Recibe `SpotStatusRequest` (`{\"status\": ...}`) y cambia el estado de verdad (RN-10).\n\nSolo admite AVAILABLE <-> UNAVAILABLE. Pedir OCCUPIED por aqui devuelve 409: para ocupar esta `POST /v1/spots/occupy`.\n\nOJO cross-repo: `StaySpotClientAdapter.updateSpotStatus` sigue mandando `{\"type\": ...}` y por tanto recibe un 400. Hoy no lo llama ningun caso de uso de stay-service.",
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"type\": \"{{vehicleType}}\"\n}",
+          "raw": "{\n  \"status\": \"UNAVAILABLE\"\n}",
           "options": {
             "raw": {
               "language": "json"
@@ -282,77 +282,55 @@
           "script": {
             "type": "text/javascript",
             "exec": [
-              "pm.test('200 OK', () => pm.response.to.have.status(200));"
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('la plaza queda UNAVAILABLE', () => pm.expect(body.status).to.eql('UNAVAILABLE'));"
             ]
           }
         }
       ]
     },
     {
-      "name": "Pendiente de implementar",
-      "description": "Rutas o comportamientos del openapi.yml que el controlador no cubre.",
-      "item": [
-        {
-          "name": "[TODO] Consultar disponibilidad",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrlSpot}}/v1/spots/availability?type=CAR",
-              "host": [
-                "{{baseUrlSpot}}"
-              ],
-              "path": [
-                "v1",
-                "spots",
-                "availability"
-              ],
-              "query": [
-                {
-                  "key": "type",
-                  "value": "CAR",
-                  "description": "no implementado"
-                }
-              ]
-            },
-            "description": "`GET /v1/spots/availability` esta en el openapi.yml pero no en `SpotRestAdapter`.\n\nDevuelve **404**... o peor: Spring puede intentar resolver `availability` como el `{id}` UUID del GET por id y responder 400. En ninguno de los dos casos es un resultado de negocio."
-          },
-          "response": []
-        },
-        {
-          "name": "[TODO] Marcar plaza como UNAVAILABLE",
-          "request": {
-            "method": "PATCH",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrlSpot}}/v1/spots/{{spotId}}/status",
-              "host": [
-                "{{baseUrlSpot}}"
-              ],
-              "path": [
-                "v1",
-                "spots",
-                "{{spotId}}",
-                "status"
-              ]
-            },
-            "description": "Lo que el contrato espera de `PATCH /{id}/status`: cambiar el estado. Hoy este body **se ignora** (el controlador solo lee `type`) y la respuesta sera un 200 engañoso con el estado sin tocar.",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"status\": \"UNAVAILABLE\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
+      "name": "Consultar disponibilidad (HU-03)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrlSpot}}/v1/spots/availability?type=CAR",
+          "host": [
+            "{{baseUrlSpot}}"
+          ],
+          "path": [
+            "v1",
+            "spots",
+            "availability"
+          ],
+          "query": [
+            {
+              "key": "type",
+              "value": "CAR"
             }
-          },
-          "response": []
+          ]
+        },
+        "description": "`GET /v1/spots/availability?type=` -> 200 con `AvailabilityResponse`.\n\nSolo lee, no reserva nada: para ocupar esta `POST /v1/spots/occupy`.\nRN-10: las plazas UNAVAILABLE no cuentan como disponibles, asi que `availableCount` puede ser 0 con `totalCount` > 0.\n\nSin el parametro `type` responde 400."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('responde el tipo consultado', () => pm.expect(body.type).to.eql('CAR'));",
+              "pm.test('trae los contadores', () => {",
+              "    pm.expect(body.availableCount).to.be.a('number');",
+              "    pm.expect(body.totalCount).to.be.a('number');",
+              "});",
+              "pm.test('available es coherente con availableCount', () => pm.expect(body.available).to.eql(body.availableCount > 0));"
+            ]
+          }
         }
       ]
     }
