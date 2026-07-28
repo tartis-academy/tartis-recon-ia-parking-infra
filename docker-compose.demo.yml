@@ -7,9 +7,11 @@
 #   docker network create parking-shared   # si no existe ya
 #   docker compose -f docker-compose.demo.yml --env-file .env.demo up --build
 #
-# Sin Flyway/Liquibase todavia: cada Postgres arranca con el schema.sql del
-# propio repo del servicio (backend/<servicio>/db/schema.sql) como init
-# script, para que el perfil prod (ddl-auto=validate) encuentre las tablas.
+# RECON-812: cada servicio versiona su esquema con Flyway (V1__init.sql en
+# src/main/resources/db/migration) y lo aplica el solo al arrancar contra su
+# Postgres dedicada, en vez de depender de un schema.sql montado como init
+# script. baseline-on-migrate=true evita romper las BD de demo que ya tenian
+# las tablas creadas por el schema.sql anterior.
 #
 # Puertos de host 8080-8084 alineados con el environment de Postman
 # "Parking - Local (dev)" (postman/Parking-Local.postman_environment.json):
@@ -29,7 +31,6 @@ services:
       - "${VEHICLE_DB_PORT:-5433}:5432"
     volumes:
       - parking-vehicle-db-data:/var/lib/postgresql/data
-      - ../tartis-recon-ai-parking-vehicleService/backend/vehicle-service/db/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${VEHICLE_DB_USER} -d ${VEHICLE_DB_NAME}"]
       interval: 5s
@@ -76,7 +77,6 @@ services:
       - "${SPOT_DB_PORT:-5434}:5432"
     volumes:
       - parking-spot-db-data:/var/lib/postgresql/data
-      - ../tartis-recon-ai-parking-spotService/backend/spot-service/db/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${SPOT_DB_USER} -d ${SPOT_DB_NAME}"]
       interval: 5s
@@ -123,7 +123,6 @@ services:
       - "${TARIFF_DB_PORT:-5435}:5432"
     volumes:
       - parking-tariff-db-data:/var/lib/postgresql/data
-      - ../tartis-recon-ai-parking-tariffService/backend/tariff-service/db/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${TARIFF_DB_USER} -d ${TARIFF_DB_NAME}"]
       interval: 5s
@@ -170,7 +169,6 @@ services:
       - "${TICKET_DB_PORT:-5436}:5432"
     volumes:
       - parking-ticket-db-data:/var/lib/postgresql/data
-      - ../tartis-recon-ai-parking-ticketService/backend/ticket-service/db/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${TICKET_DB_USER} -d ${TICKET_DB_NAME}"]
       interval: 5s
@@ -217,7 +215,6 @@ services:
       - "${STAY_DB_PORT:-5437}:5432"
     volumes:
       - parking-stay-db-data:/var/lib/postgresql/data
-      - ../tartis-recon-ai-parking-stayService/backend/stay-service/db/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${STAY_DB_USER} -d ${STAY_DB_NAME}"]
       interval: 5s
