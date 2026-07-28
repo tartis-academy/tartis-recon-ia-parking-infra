@@ -1,0 +1,44 @@
+_format_version: "3.0"
+
+services:
+  - name: vehicle-service
+    url: http://vehicle-service:8080
+    routes:
+      - name: vehicle-service-route
+        paths:
+          - /v1/vehicles
+        strip_path: false
+
+  - name: spot-service
+    url: http://spot-service:8080
+    routes:
+      - name: spot-service-route
+        paths:
+          - /v1/spots
+        strip_path: false
+
+  - name: tariff-service
+    url: http://tariff-service:8080
+    routes:
+      - name: tariff-service-route
+        paths:
+          - /v1/tariffs
+        strip_path: false
+
+  - name: ticket-service
+    url: http://ticket-service:8080
+    routes:
+      - name: ticket-service-route
+        paths:
+          - /v1/entry-tickets
+          - /v1/receipts
+          - /v1/tickets
+        strip_path: false
+
+  - name: stay-service
+    url: http://stay-service:8080
+    routes:
+      - name: stay-service-route
+        paths:
+          - /v1/stays
+        strip_path: false
