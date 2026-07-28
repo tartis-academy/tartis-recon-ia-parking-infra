@@ -118,6 +118,28 @@ services:
     networks:
       - parking-shared
 
+  # rabbitmq:3-management esta EOL; se usa la serie 4 (misma API AMQP y UI)
+  rabbitmq:
+    image: rabbitmq:4-management
+    container_name: parking-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:?falta RABBITMQ_USER en .env}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?falta RABBITMQ_PASSWORD en .env}
+    ports:
+      - "${RABBITMQ_AMQP_PORT:-5672}:5672"
+      - "${RABBITMQ_MGMT_PORT:-15672}:15672"
+    volumes:
+      - parking-rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_running"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - parking-shared
+
 volumes:
   parking-dev-postgres-data:
   parking-pgadmin-data:
@@ -125,6 +147,7 @@ volumes:
   parking-sonarqube-logs:
   parking-sonarqube-extensions:
   parking-keycloak-db-data:
+  parking-rabbitmq-data:
 
 networks:
   parking-shared:
