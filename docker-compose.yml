@@ -1,8 +1,11 @@
 # Herramientas y BD COMPARTIDAS entre microservicios (pgAdmin, SonarQube,
-# Postgres de dev con un schema por servicio). Detalle: Obsidian Tartis-Recon-IA.
+# Postgres de dev con un schema por servicio) + infra de Fase II (Keycloak,
+# Kong, RabbitMQ). Detalle: Obsidian Tartis-Recon-IA.
 #
 # La red parking-shared es externa, crearla una vez:
 #   docker network create parking-shared
+#
+# Stack completo (con docker-compose.demo.yml): ./setup.sh full
 
 services:
   postgres-dev:
@@ -66,12 +69,62 @@ services:
     networks:
       - parking-shared
 
+  keycloak-db:
+    image: postgres:15.18-alpine
+    container_name: parking-keycloak-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${KEYCLOAK_DB_USER:?falta KEYCLOAK_DB_USER en .env}
+      POSTGRES_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?falta KEYCLOAK_DB_PASSWORD en .env}
+      POSTGRES_DB: ${KEYCLOAK_DB_NAME:-keycloak}
+    ports:
+      - "${KEYCLOAK_DB_PORT:-5438}:5432"
+    volumes:
+      - parking-keycloak-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${KEYCLOAK_DB_USER:?falta KEYCLOAK_DB_USER en .env} -d ${KEYCLOAK_DB_NAME:-keycloak}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - parking-shared
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.7.0
+    container_name: parking-keycloak
+    restart: unless-stopped
+    command: start-dev
+    environment:
+      KC_DB: postgres
+      KC_DB_URL_HOST: keycloak-db
+      KC_DB_URL_DATABASE: ${KEYCLOAK_DB_NAME:-keycloak}
+      KC_DB_USERNAME: ${KEYCLOAK_DB_USER:?falta KEYCLOAK_DB_USER en .env}
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?falta KEYCLOAK_DB_PASSWORD en .env}
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USER:?falta KEYCLOAK_ADMIN_USER en .env}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?falta KEYCLOAK_ADMIN_PASSWORD en .env}
+      KC_HEALTH_ENABLED: "true"
+    ports:
+      - "${KEYCLOAK_PORT:-8180}:8080"
+    depends_on:
+      keycloak-db:
+        condition: service_healthy
+    healthcheck:
+      # imagen distroless sin curl/wget: golpea el puerto de management (9000) via /dev/tcp
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 && grep -q '200 OK' <&3"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 45s
+    networks:
+      - parking-shared
+
 volumes:
   parking-dev-postgres-data:
   parking-pgadmin-data:
   parking-sonarqube-data:
   parking-sonarqube-logs:
   parking-sonarqube-extensions:
+  parking-keycloak-db-data:
 
 networks:
   parking-shared:
