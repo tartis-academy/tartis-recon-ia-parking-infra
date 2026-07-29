@@ -79,10 +79,20 @@ services:
               claims_to_verify: ["exp"]
               uri_param_names: []
 
-  # stay-service expondra ademas un endpoint SSE (SSE-08, pendiente); ese
-  # valida el token por query param en vez de cabecera y necesitara su propia
-  # ruta sin este plugin jwt (o con jwt en modo uri_param_names). No tocar
-  # esta ruta para incluirlo, crear una ruta nueva cuando exista el endpoint.
+  # stay-service expondra ademas un endpoint SSE (SSE-08, pendiente). No tocar
+  # esta ruta para incluirlo: hay que crear una ruta nueva, porque necesita dos
+  # cosas distintas de las demas.
+  #
+  #   1. jwt leyendo el token de la query string, no de la cabecera: la API
+  #      EventSource del navegador no permite cabeceras propias. Es decir
+  #      uri_param_names: ["jwt"] y header_names: [], la unica excepcion al
+  #      resto del fichero.
+  #   2. file-log a nivel de route con custom_fields_by_lua, porque el
+  #      serializer de Kong NO redacta la query string y el token acabaria en
+  #      los logs (ver la nota del plugin file-log mas abajo).
+  #
+  # scripts/ci/validate_kong.py exige las dos cosas para el nombre de ruta
+  # stay-service-events-route, asi que el CI bloquea si SSE-08 entra sin ellas.
   - name: stay-service
     url: http://stay-service:8080/v1/stays
     routes:
@@ -120,5 +130,60 @@ plugins:
         - "http://localhost:5173"
       methods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
       headers: [Accept, Content-Type, Authorization]
+      # GW-06: sin Access-Control-Expose-Headers, el navegador recibe la
+      # cabecera X-Correlation-ID pero el JavaScript del front NO puede
+      # leerla. Solo se exponen las cabeceras simples de CORS salvo que se
+      # listen aqui explicitamente. Sin esto, echo_downstream del plugin
+      # correlation-id no sirve de nada para el frontend.
+      exposed_headers: ["X-Correlation-ID"]
       credentials: true
       max_age: 3600
+
+  # ============================================================
+  # GW-06 — trazabilidad
+  # ============================================================
+  #
+  # Reparto de responsabilidades, porque Kong solo puede dar la mitad:
+  #
+  #   Kong   -> identidad de PETICION (X-Correlation-ID), propagada upstream
+  #   Spring -> identidad de USUARIO (sub del JWT), en el MDC de cada micro
+  #
+  # Kong no puede identificar al usuario: el plugin jwt casa el token contra
+  # el consumer cuya `key` es el claim iss, y los tres usuarios del realm
+  # (admin.test, operario.test, user.test) salen del mismo issuer, asi que
+  # todos mapean al consumer keycloak-parking. Las cabeceras X-Consumer-*
+  # que Kong inyecta upstream valen igual para un ADMIN que para un USER.
+  # Ver docs/adr/0001.
+  #
+  # Los logs de Kong y los de los 5 microservicios se unen por el
+  # correlation-id; el usuario sale del log del micro.
+  - name: correlation-id
+    config:
+      header_name: X-Correlation-ID
+      # Por defecto seria Kong-Request-ID. Se renombra porque es el nombre que
+      # esperan los filtros de los microservicios (CorrelationIdFilter).
+      generator: uuid#counter
+      # Por defecto es false: hay que activarlo para devolver la cabecera al
+      # cliente. Asi el front puede mostrarla en un error y el usuario pegarla
+      # en un ticket de soporte.
+      echo_downstream: true
+
+  # Registro estructurado (JSON) de cada peticion a stdout, que es donde Kong
+  # ya escribe (KONG_PROXY_ACCESS_LOG=/dev/stdout), asi que lo recoge
+  # `docker logs parking-kong` sin montar volumenes.
+  #
+  # No filtra el token: el serializer de Kong redacta de oficio las cabeceras
+  # Authorization y Proxy-Authorization (kong/pdk/log.lua). Comprobable con:
+  #   docker logs parking-kong --tail 1 | grep -o '"authorization":"[^"]*"'
+  #   -> "authorization":"REDACTED"
+  #
+  # Lo que NO redacta es la query string, y la mete en tres campos
+  # (request.uri, request.url, request.querystring). Irrelevante en estas 7
+  # rutas, donde el token va en cabecera. CRITICO en la ruta SSE (SSE-08),
+  # donde EventSource obliga a mandarlo en la URL: alli hay que declarar
+  # file-log a nivel de route con custom_fields_by_lua para taparlos. El
+  # validador de scripts/ci lo exige, asi que la ruta SSE no puede entrar sin
+  # esa redaccion.
+  - name: file-log
+    config:
+      path: /dev/stdout
