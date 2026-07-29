@@ -12,6 +12,7 @@ services:
           - name: jwt
             config:
               claims_to_verify: ["exp"]
+              uri_param_names: []
 
   - name: spot-service
     url: http://spot-service:8080/v1/spots
@@ -24,6 +25,7 @@ services:
           - name: jwt
             config:
               claims_to_verify: ["exp"]
+              uri_param_names: []
 
   - name: tariff-service
     url: http://tariff-service:8080/v1/tariffs
@@ -36,6 +38,7 @@ services:
           - name: jwt
             config:
               claims_to_verify: ["exp"]
+              uri_param_names: []
 
   - name: ticket-service-entry-tickets
     url: http://ticket-service:8080/v1/entry-tickets
@@ -48,6 +51,7 @@ services:
           - name: jwt
             config:
               claims_to_verify: ["exp"]
+              uri_param_names: []
 
   - name: ticket-service-receipts
     url: http://ticket-service:8080/v1/receipts
@@ -60,6 +64,7 @@ services:
           - name: jwt
             config:
               claims_to_verify: ["exp"]
+              uri_param_names: []
 
   - name: ticket-service-tickets
     url: http://ticket-service:8080/v1/tickets
@@ -72,6 +77,7 @@ services:
           - name: jwt
             config:
               claims_to_verify: ["exp"]
+              uri_param_names: []
 
   # stay-service expondra ademas un endpoint SSE (SSE-08, pendiente); ese
   # valida el token por query param en vez de cabecera y necesitara su propia
@@ -88,6 +94,7 @@ services:
           - name: jwt
             config:
               claims_to_verify: ["exp"]
+              uri_param_names: []
 
 consumers:
   - username: keycloak-parking

@@ -49,3 +49,19 @@ jobs:
           ]
           sys.exit('Rutas sin plugin jwt: ' + ', '.join(missing) if missing else 0)
           "
+
+      - name: Ningun jwt de kong.yml acepta el token por query string (default uri_param_names=[jwt])
+        run: |
+          pip install --quiet pyyaml
+          python3 -c "
+          import sys, yaml
+          d = yaml.safe_load(open('kong/kong.yml'))
+          bad = [
+              route['name']
+              for svc in d.get('services', [])
+              for route in svc.get('routes', [])
+              for p in route.get('plugins', [])
+              if p['name'] == 'jwt' and p.get('config', {}).get('uri_param_names') != []
+          ]
+          sys.exit('Rutas con jwt sin uri_param_names: [] (aceptan el token por query string): ' + ', '.join(bad) if bad else 0)
+          "
