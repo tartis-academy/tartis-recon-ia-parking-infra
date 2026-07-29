@@ -1,0 +1,127 @@
+{
+  "realm": "parking",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "roles": {
+    "realm": [
+      {
+        "name": "ADMIN",
+        "description": "Administra tarifas, plazas y usuarios"
+      },
+      {
+        "name": "OPERARIO",
+        "description": "Check-in/check-out y operativa diaria"
+      },
+      {
+        "name": "USER",
+        "description": "Consulta su propia estancia/ticket"
+      }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "parking-frontend",
+      "enabled": true,
+      "publicClient": true,
+      "protocol": "openid-connect",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "redirectUris": [
+        "http://localhost:8090/*",
+        "http://localhost:5173/*"
+      ],
+      "webOrigins": [
+        "http://localhost:8090",
+        "http://localhost:5173"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      }
+    }
+  ],
+  "users": [
+    {
+      "username": "admin.test",
+      "enabled": true,
+      "emailVerified": true,
+      "requiredActions": [],
+      "firstName": "Admin",
+      "lastName": "Test",
+      "email": "admin.test@tartis.local",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Admin.123!",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "ADMIN"
+      ]
+    },
+    {
+      "username": "operario.test",
+      "enabled": true,
+      "emailVerified": true,
+      "requiredActions": [],
+      "firstName": "Operario",
+      "lastName": "Test",
+      "email": "operario.test@tartis.local",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Operario.123!",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "OPERARIO"
+      ]
+    },
+    {
+      "username": "user.test",
+      "enabled": true,
+      "emailVerified": true,
+      "requiredActions": [],
+      "firstName": "User",
+      "lastName": "Test",
+      "email": "user.test@tartis.local",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "User.123!",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "USER"
+      ]
+    }
+  ],
+  "components": {
+    "org.keycloak.keys.KeyProvider": [
+      {
+        "name": "rsa-fija-dev",
+        "providerId": "rsa",
+        "config": {
+          "priority": [
+            "100"
+          ],
+          "enabled": [
+            "true"
+          ],
+          "active": [
+            "true"
+          ],
+          "privateKey": [
+            "-----BEGIN RSA PRIVATE KEY-----\nMIIEpAIBAAKCAQEAwDA4CetbA5/GrAA7BqlFYuJOcQANcm9H16KzCVYsOfPLCf5t\n0eh9k8PBFpW7mF5B8uBYiNbMvQKCimk8Ezlnoj6503Gn63A/hPfuiUEgzJyykLBQ\n8WZmuxhR7t5Sggx1XAHcU60XP8XJffs2fFGjfdE7DxaEfxsTWXmR/aY7T28YsrR7\nYQ0UxAinKeypB4bqiiusHcTwYO+2g/58CPBQaSLueZbxCwEt7ArBEIzhGa1nRU3m\n4T3TDxLWOnS9KuBcRTByqEgQ5a344r7VmA6wgBGevDfQRHR4hHwSX/sDNjn0tZnM\nKPHKWsBgn3zwKQD8wbMb2LlTBH9ru+EPl6S5KwIDAQABAoIBAFtyNh/mKGLTkhVC\ncNONFHJmKxvSghN6xqzggh8FrTqP+YLSWM/ht2rpYIVODrqD0w5tWEMYLcgbmyCf\nzRF6pYiKHyJweI1q1hZ/YDVX03L4dnCpLIKIjoYknsuxZoHxyp/SVNNNz3utMWAr\n+bNypv/VYCwgM0BFklHnKiOOhrcW2lbz5YI7G9WRExhOga+QBgwvPcpvBijCx5YI\n/Q2ZxOsD7y2FlwsOU1YL8+mI4MFt3B8U8lN/CKwdBzTd+m4RtN7gBR5TbhPrDytm\n4JKUdR4CYWTq52Zt0wPci7HrjVrK3q2xfyhqyMnfS8VGVPuDXBUH4y+LsQOqd1Wl\nMowyZZ0CgYEA8L1YZHRSPfWIHgKi0UobtImgJtsJddbth3tYdaVSlDhrc0UC2T+8\nadgwI5hlz1032qDR47PnDlKjPmHNNkOeskCgQOxPiJ1kDywM14MXYLObW6daFkS+\nHYo21rbPfEl+vcx9VGyg3ZPWfcdz4wKDi14x5ZxNdTM38B9ap5JhhfcCgYEAzF7/\nS0vGJag8AYFZf42gKkw9/ZK3/jRPdOTPOkF9qA3imZSuMcWNQrKGM5qu8Rv1gHOx\n6qKnRfXLOHQALKsnYthcOndfQhvscol/ZuBKLS37diNKtGSndKWotwZZfmRrX5/7\n4aaaQA12BDgKR9p61ew5ueNCYi8eI9SsZe6fCW0CgYEAx2/FS6tF+shvFJWQdxwS\n6bTeNXJeWv5MV2Hq/cORLvOyqJLycjIoD/OmpcZ6CZkrTXbPivkeILJ7RJHXZO4O\nCZQabs6WcRIas6sFlIConFcPDJYOvsYCTgyTs7tNFqT4V5qR9Z/sgMQZ/KeArP8H\nJS1K3vJnBQIChG4lNw/AtS8CgYEAwObN66FbJ0IzWWxhMK9aRXJvdMAe4Vc4xGoQ\nW7ljRNPOVg5rmVkRa6ocV+siQzyTrqoFfiYG41cMeX2siH0IkRkNfLYd+MVomffE\nhDMicKCdYLYRFlKHaOfQZukcYduhKcJVOnlJ0Tmjcnn+4jGLjg4JsraaexhkR4e/\nLftcq8UCgYBI7WRicNHxrSJ7GbuHtW7f01zSIu4ifvpyWoJmkUX7ETPYaqQrCpd4\nkrvlXmX7LxYum2so99tha/Z4bMlOhglkLlZ0gbaTgU1jaP7ijtfvA9pkhuLBtm9W\ntnd/AqQMPcoDX90+vlUVC4CqeG+Ukr0VCQXwLVkcFnXp8rmuEBAspw==\n-----END RSA PRIVATE KEY-----\n"
+          ],
+          "certificate": [
+            "MIICsDCCAZigAwIBAgIUe6GFPUwmSbt7WN52CyS3SeEVFkkwDQYJKoZIhvcNAQELBQAwEjEQMA4GA1UEAwwHcGFya2luZzAeFw0yNjAxMDEwMDAwMDBaFw00NjAxMDEwMDAwMDBaMBIxEDAOBgNVBAMMB3BhcmtpbmcwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDAMDgJ61sDn8asADsGqUVi4k5xAA1yb0fXorMJViw588sJ/m3R6H2Tw8EWlbuYXkHy4FiI1sy9AoKKaTwTOWeiPrnTcafrcD+E9+6JQSDMnLKQsFDxZma7GFHu3lKCDHVcAdxTrRc/xcl9+zZ8UaN90TsPFoR/GxNZeZH9pjtPbxiytHthDRTECKcp7KkHhuqKK6wdxPBg77aD/nwI8FBpIu55lvELAS3sCsEQjOEZrWdFTebhPdMPEtY6dL0q4FxFMHKoSBDlrfjivtWYDrCAEZ68N9BEdHiEfBJf+wM2OfS1mcwo8cpawGCffPApAPzBsxvYuVMEf2u74Q+XpLkrAgMBAAEwDQYJKoZIhvcNAQELBQADggEBAHeFs5e6JHlJJbUn6Zt3RihHTxT8nYKngq4EXdj10y9gVFJkM3LNp8kn3SjDsyHqTI42BupbmjzQ5Uf2izqBEyjy/0NA7WS3tomjD6U07/1xkBOmX+eH2OPKDyxXQnz1QX2eNGT0ktTdICLOLlGlgzj2jGtyTUF8IJcPcg63sUjyY82P3cpaeexyZ0SBQIVXE5h/CpCDC3kDb3d9ZxjebAgA4+IrdU1ucNkdiI7FXs9cuQ1Zq4rqjoJf3aRMx/gtr5r1s05Td23db7zukDSMzoup7MocoLfkZTRRmgmaBbO3tS4ECueaE6pEVd62oO0NEqdVSy+aWlxlBcFvrouuHRM="
+          ]
+        }
+      }
+    ]
+  }
+}
