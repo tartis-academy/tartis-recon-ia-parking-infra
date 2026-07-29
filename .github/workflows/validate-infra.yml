@@ -6,6 +6,7 @@ on:
       - "docker-compose*.yml"
       - "kong/**"
       - ".env.example"
+      - "scripts/ci/**"
       - ".github/workflows/validate-infra.yml"
   push:
     branches: [main]
@@ -13,6 +14,7 @@ on:
       - "docker-compose*.yml"
       - "kong/**"
       - ".env.example"
+      - "scripts/ci/**"
 
 jobs:
   validate:
@@ -35,17 +37,7 @@ jobs:
             -v "${{ github.workspace }}/kong:/kong/declarative:ro" \
             kong:3.9 kong config parse /kong/declarative/kong.yml
 
-      - name: Ninguna ruta de kong.yml sin el plugin jwt
+      - name: Invariantes de seguridad del plugin jwt en kong.yml
         run: |
           pip install --quiet pyyaml
-          python3 -c "
-          import sys, yaml
-          d = yaml.safe_load(open('kong/kong.yml'))
-          missing = [
-              route['name']
-              for svc in d.get('services', [])
-              for route in svc.get('routes', [])
-              if 'jwt' not in [p['name'] for p in route.get('plugins', [])]
-          ]
-          sys.exit('Rutas sin plugin jwt: ' + ', '.join(missing) if missing else 0)
-          "
+          python3 scripts/ci/validate_kong.py kong/kong.yml
