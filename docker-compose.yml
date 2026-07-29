@@ -1,74 +1,13 @@
-# Herramientas y BD COMPARTIDAS entre microservicios (pgAdmin, SonarQube,
-# Postgres de dev con un schema por servicio) + infra de Fase II (Keycloak,
-# Kong, RabbitMQ). Detalle: Obsidian Tartis-Recon-IA.
+# Plataforma nucleo de Fase II (Keycloak, Kong, RabbitMQ). BD de dev y
+# pgAdmin viven en docker-compose.dev.yml. Detalle: Obsidian Tartis-Recon-IA.
 #
 # La red parking-shared es externa, crearla una vez:
 #   docker network create parking-shared
 #
-# Stack completo (con docker-compose.demo.yml): ./setup.sh full
+# ./setup.sh          plataforma + BD de dev + pgAdmin
+# ./setup.sh -f       plataforma + los 5 microservicios + frontend
 
 services:
-  postgres-dev:
-    image: postgres:15.18-alpine
-    container_name: parking-dev-postgres
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${DB_USER}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_DB: ${DB_NAME}
-    ports:
-      - "${DB_PORT:-5432}:5432"
-    volumes:
-      - parking-dev-postgres-data:/var/lib/postgresql/data
-      - ./init-dev-schemas.sql:/docker-entrypoint-initdb.d/init-schemas.sql:ro
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-    networks:
-      - parking-shared
-
-  pgadmin:
-    image: dpage/pgadmin4:9.16
-    container_name: parking-pgadmin
-    restart: unless-stopped
-    environment:
-      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL}
-      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
-    ports:
-      - "${PGADMIN_PORT:-5050}:80"
-    volumes:
-      - parking-pgadmin-data:/var/lib/pgadmin
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:80/misc/ping || exit 1"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-    networks:
-      - parking-shared
-
-  sonarqube:
-    image: sonarqube:community
-    container_name: parking-sonarqube
-    restart: unless-stopped
-    environment:
-      SONAR_ES_BOOTSTRAP_CHECKS_DISABLE: "true"
-    ports:
-      - "${SONARQUBE_PORT:-9000}:9000"
-    volumes:
-      - parking-sonarqube-data:/opt/sonarqube/data
-      - parking-sonarqube-logs:/opt/sonarqube/logs
-      - parking-sonarqube-extensions:/opt/sonarqube/extensions
-    healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:9000/api/system/status | grep -q '\"status\":\"UP\"' || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 120s
-    networks:
-      - parking-shared
-
   keycloak-db:
     image: postgres:15.18-alpine
     container_name: parking-keycloak-db
@@ -93,7 +32,7 @@ services:
     image: quay.io/keycloak/keycloak:26.7.0
     container_name: parking-keycloak
     restart: unless-stopped
-    command: start-dev
+    command: start-dev --import-realm
     environment:
       KC_DB: postgres
       KC_DB_URL_HOST: keycloak-db
@@ -105,6 +44,8 @@ services:
       KC_HEALTH_ENABLED: "true"
     ports:
       - "${KEYCLOAK_PORT:-8180}:8080"
+    volumes:
+      - ./keycloak/realm-export.dev-only.json:/opt/keycloak/data/import/realm-export.json:ro
     depends_on:
       keycloak-db:
         condition: service_healthy
@@ -167,11 +108,6 @@ services:
       - parking-shared
 
 volumes:
-  parking-dev-postgres-data:
-  parking-pgadmin-data:
-  parking-sonarqube-data:
-  parking-sonarqube-logs:
-  parking-sonarqube-extensions:
   parking-keycloak-db-data:
   parking-rabbitmq-data:
 

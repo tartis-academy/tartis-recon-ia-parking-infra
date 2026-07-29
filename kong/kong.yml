@@ -2,43 +2,116 @@ _format_version: "3.0"
 
 services:
   - name: vehicle-service
-    url: http://vehicle-service:8080
+    url: http://vehicle-service:8080/v1/vehicles
     routes:
       - name: vehicle-service-route
         paths:
-          - /v1/vehicles
-        strip_path: false
+          - /api/v1/vehicles
+        strip_path: true
+        plugins:
+          - name: jwt
+            config:
+              claims_to_verify: ["exp"]
 
   - name: spot-service
-    url: http://spot-service:8080
+    url: http://spot-service:8080/v1/spots
     routes:
       - name: spot-service-route
         paths:
-          - /v1/spots
-        strip_path: false
+          - /api/v1/spots
+        strip_path: true
+        plugins:
+          - name: jwt
+            config:
+              claims_to_verify: ["exp"]
 
   - name: tariff-service
-    url: http://tariff-service:8080
+    url: http://tariff-service:8080/v1/tariffs
     routes:
       - name: tariff-service-route
         paths:
-          - /v1/tariffs
-        strip_path: false
+          - /api/v1/tariffs
+        strip_path: true
+        plugins:
+          - name: jwt
+            config:
+              claims_to_verify: ["exp"]
 
-  - name: ticket-service
-    url: http://ticket-service:8080
+  - name: ticket-service-entry-tickets
+    url: http://ticket-service:8080/v1/entry-tickets
     routes:
-      - name: ticket-service-route
+      - name: ticket-service-entry-tickets-route
         paths:
-          - /v1/entry-tickets
-          - /v1/receipts
-          - /v1/tickets
-        strip_path: false
+          - /api/v1/entry-tickets
+        strip_path: true
+        plugins:
+          - name: jwt
+            config:
+              claims_to_verify: ["exp"]
 
+  - name: ticket-service-receipts
+    url: http://ticket-service:8080/v1/receipts
+    routes:
+      - name: ticket-service-receipts-route
+        paths:
+          - /api/v1/receipts
+        strip_path: true
+        plugins:
+          - name: jwt
+            config:
+              claims_to_verify: ["exp"]
+
+  - name: ticket-service-tickets
+    url: http://ticket-service:8080/v1/tickets
+    routes:
+      - name: ticket-service-tickets-route
+        paths:
+          - /api/v1/tickets
+        strip_path: true
+        plugins:
+          - name: jwt
+            config:
+              claims_to_verify: ["exp"]
+
+  # stay-service expondra ademas un endpoint SSE (SSE-08, pendiente); ese
+  # valida el token por query param en vez de cabecera y necesitara su propia
+  # ruta sin este plugin jwt (o con jwt en modo uri_param_names). No tocar
+  # esta ruta para incluirlo, crear una ruta nueva cuando exista el endpoint.
   - name: stay-service
-    url: http://stay-service:8080
+    url: http://stay-service:8080/v1/stays
     routes:
       - name: stay-service-route
         paths:
-          - /v1/stays
-        strip_path: false
+          - /api/v1/stays
+        strip_path: true
+        plugins:
+          - name: jwt
+            config:
+              claims_to_verify: ["exp"]
+
+consumers:
+  - username: keycloak-parking
+    jwt_secrets:
+      - key: "http://localhost:8180/realms/parking"
+        algorithm: RS256
+        rsa_public_key: |
+          -----BEGIN PUBLIC KEY-----
+          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwDA4CetbA5/GrAA7BqlF
+          YuJOcQANcm9H16KzCVYsOfPLCf5t0eh9k8PBFpW7mF5B8uBYiNbMvQKCimk8Ezln
+          oj6503Gn63A/hPfuiUEgzJyykLBQ8WZmuxhR7t5Sggx1XAHcU60XP8XJffs2fFGj
+          fdE7DxaEfxsTWXmR/aY7T28YsrR7YQ0UxAinKeypB4bqiiusHcTwYO+2g/58CPBQ
+          aSLueZbxCwEt7ArBEIzhGa1nRU3m4T3TDxLWOnS9KuBcRTByqEgQ5a344r7VmA6w
+          gBGevDfQRHR4hHwSX/sDNjn0tZnMKPHKWsBgn3zwKQD8wbMb2LlTBH9ru+EPl6S5
+          KwIDAQAB
+          -----END PUBLIC KEY-----
+
+plugins:
+  - name: cors
+    config:
+      origins:
+        - "http://localhost:8090"
+        - "http://localhost:5173"
+      methods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
+      headers: [Accept, Content-Type, Authorization]
+      credentials: true
+      max_age: 3600

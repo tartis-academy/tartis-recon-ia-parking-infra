@@ -1,0 +1,51 @@
+name: Validar infra
+
+on:
+  pull_request:
+    paths:
+      - "docker-compose*.yml"
+      - "kong/**"
+      - ".env.example"
+      - ".github/workflows/validate-infra.yml"
+  push:
+    branches: [main]
+    paths:
+      - "docker-compose*.yml"
+      - "kong/**"
+      - ".env.example"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Preparar .env de prueba desde .env.example
+        run: cp .env.example .env
+
+      - name: docker compose config (plataforma + BD de dev + pgAdmin)
+        run: docker compose -f docker-compose.yml -f docker-compose.dev.yml config -q
+
+      - name: docker compose config (plataforma + stack completo)
+        run: docker compose -f docker-compose.yml -f docker-compose.demo.yml config -q
+
+      - name: Validar kong.yml
+        run: |
+          docker run --rm -e KONG_DATABASE=off \
+            -v "${{ github.workspace }}/kong:/kong/declarative:ro" \
+            kong:3.9 kong config parse /kong/declarative/kong.yml
+
+      - name: Ninguna ruta de kong.yml sin el plugin jwt
+        run: |
+          pip install --quiet pyyaml
+          python3 -c "
+          import sys, yaml
+          d = yaml.safe_load(open('kong/kong.yml'))
+          missing = [
+              route['name']
+              for svc in d.get('services', [])
+              for route in svc.get('routes', [])
+              if 'jwt' not in [p['name'] for p in route.get('plugins', [])]
+          ]
+          sys.exit('Rutas sin plugin jwt: ' + ', '.join(missing) if missing else 0)
+          "
