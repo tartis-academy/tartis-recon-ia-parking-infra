@@ -5,7 +5,7 @@
 #   docker network create parking-shared
 #
 # ./setup.sh          plataforma + BD de dev + pgAdmin
-# ./setup.sh full     plataforma + los 5 microservicios + frontend
+# ./setup.sh -f       plataforma + los 5 microservicios + frontend
 
 services:
   keycloak-db:
@@ -45,7 +45,7 @@ services:
     ports:
       - "${KEYCLOAK_PORT:-8180}:8080"
     volumes:
-      - ./keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
+      - ./keycloak/realm-export.dev-only.json:/opt/keycloak/data/import/realm-export.json:ro
     depends_on:
       keycloak-db:
         condition: service_healthy

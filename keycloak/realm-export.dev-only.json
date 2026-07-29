@@ -1,6 +1,8 @@
 {
   "realm": "parking",
   "enabled": true,
+  "displayName": "PARKING (DEV - clave RSA COMPROMETIDA, no usar fuera de local)",
+  "displayNameHtml": "<strong>PARKING (DEV — clave RSA COMPROMETIDA, no usar fuera de local)</strong>",
   "sslRequired": "none",
   "registrationAllowed": false,
   "roles": {

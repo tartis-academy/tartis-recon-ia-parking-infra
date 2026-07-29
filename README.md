@@ -45,10 +45,14 @@ levanta además pgAdmin, y no toca los `.env` de los servicios.
 
 ```bash
 ./setup.sh              # plataforma + Postgres dev + pgAdmin
-./setup.sh full         # plataforma + los 5 microservicios y el frontend
-./setup.sh down         # para los contenedores
-./setup.sh clean        # para y BORRA los datos
+./setup.sh -f           # plataforma + los 5 microservicios y el frontend
+./setup.sh -f -s vehicle,spot   # -f pero solo estos microservicios (+ sus dependencias)
+./setup.sh -d           # para los contenedores
+./setup.sh -c           # para y BORRA los datos
+./setup.sh -h           # ayuda completa
 ```
+
+(`full`/`down`/`clean` sin guion también funcionan, por compatibilidad con la sintaxis anterior.)
 
 Si prefieres ir a mano:
 
@@ -81,16 +85,16 @@ servicio usa su propio Postgres dedicado.
 
 Persistencia en `keycloak-db`, un Postgres dedicado — no se reutiliza el
 `postgres-dev` compartido, para no mezclar datos de identidad con datos de
-negocio, y para que `./setup.sh clean` (que borra los volúmenes de dev) no
+negocio, y para que `./setup.sh -c` (que borra los volúmenes de dev) no
 se lleve el realm por delante.
 
-El realm `parking` vive como código en [`keycloak/realm-export.json`](keycloak/realm-export.json)
+El realm `parking` vive como código en [`keycloak/realm-export.dev-only.json`](keycloak/realm-export.dev-only.json)
 y se importa solo al arrancar (`start-dev --import-realm`): un entorno recién
 levantado ya tiene los roles `ADMIN`/`OPERARIO`/`USER`, el cliente público
 `parking-frontend` y tres usuarios de prueba (`admin.test`, `operario.test`,
 `user.test`, contraseñas `<Rol>.123!`). El realm incluye además un par de
 claves RS256 **fijas** (`components.org.keycloak.keys.KeyProvider`) en vez de
-dejar que Keycloak genere unas nuevas en cada `./setup.sh clean` — si no,
+dejar que Keycloak genere unas nuevas en cada `./setup.sh -c` — si no,
 la clave pública que Kong tiene hardcodeada dejaría de coincidir cada vez que
 alguien recrea el volumen.
 
@@ -155,6 +159,7 @@ solo valen aquí, con la condición que dispararía arreglarlos:
 | Contraseñas `change.me` en `.env.example` | Nadie las usa fuera de un portátil | Nunca deben salir de local; un entorno real necesita un gestor de secretos, no un `.env` |
 | Un único Postgres compartido con 5 schemas (`docker-compose.dev.yml`) | Más barato que 5 contenedores para programar contra la BD | El stack `full`/demo ya usa una BD dedicada por servicio; cualquier entorno real también debería |
 | Kong DB-less con `kong.yml` versionado | Reproducible entre las 15 máquinas del equipo, config revisable en PR | Sigue siendo válido en producción — es la misma filosofía de config as code |
+| **Clave privada RSA del realm en `keycloak/realm-export.dev-only.json`, en texto plano en un repo público** | Sin ella, la clave pública que Kong tiene hardcodeada dejaría de coincidir en cada `./setup.sh -c` (Keycloak generaría una nueva) | **Nunca** reusar este fichero fuera de local — quien lo tenga puede firmarse un JWT válido con rol `ADMIN`. El nombre del fichero y el `displayName` del realm avisan a propósito; si algún día hay un entorno real, claves nuevas generadas ahí, nunca las de aquí |
 
 `SPRING_PROFILES_ACTIVE` (`dev`/`prod`) en cada microservicio es el eje real
 de esta separación, no algo de este repo — aquí solo se refleja en qué
@@ -182,7 +187,7 @@ dominios reservados como `.local`.
 
 `docker compose -f docker-compose.demo.yml up` sin el otro `-f` → error
 "depends on undefined service keycloak". El stack de demo ya no se levanta
-en solitario, usa `./setup.sh full` o combina los dos ficheros a mano.
+en solitario, usa `./setup.sh -f` o combina los dos ficheros a mano.
 
 Cambias el `.env` y no se entera → `docker compose up -d --force-recreate`
 (si tocas usuario o contraseña de Postgres, además `docker compose down -v`).

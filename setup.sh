@@ -54,6 +54,17 @@ MODE_FLAGS=0
 SUBSET=""
 NONINTERACTIVE=0
 
+# Compat con la sintaxis posicional anterior (./setup.sh full|down|clean|up):
+# getopts para en el primer argumento que no empiece por '-' y lo deja sin
+# mirar, así que sin esto "./setup.sh down" arrancaba el entorno en vez de
+# pararlo, en silencio.
+case "${1:-}" in
+  full)  MODE="full";  MODE_FLAGS=$((MODE_FLAGS + 1)); shift ;;
+  down)  MODE="down";  MODE_FLAGS=$((MODE_FLAGS + 1)); shift ;;
+  clean) MODE="clean"; MODE_FLAGS=$((MODE_FLAGS + 1)); shift ;;
+  up)    shift ;;
+esac
+
 while getopts ":fdcs:yh" opt; do
   case "$opt" in
     f) MODE="full"; MODE_FLAGS=$((MODE_FLAGS + 1)) ;;
@@ -100,6 +111,14 @@ fi
 # delimitador '|' sin que reviente si el usuario mete alguno de esos.
 sed_escape() { printf '%s' "$1" | sed -e 's/[\&|]/\\&/g'; }
 
+# Entre comillas simples: 'source .env' (mas abajo) trata el valor como texto
+# literal. Sin esto, una password con espacios rompe el source, y una con
+# $(...) se ejecutaria como comando.
+quote_for_env() {
+  local escaped="${1//\'/\'\"\'\"\'}"
+  printf "'%s'" "$escaped"
+}
+
 ask_master_password() {
   [ -t 0 ] || return 0
   echo
@@ -119,7 +138,7 @@ ask_master_password() {
     warn "No coinciden o esta vacia, prueba otra vez."
   done
 
-  local esc_pass; esc_pass="$(sed_escape "$pass")"
+  local esc_pass; esc_pass="$(sed_escape "$(quote_for_env "$pass")")"
   for key in $PASSWORD_KEYS; do
     sed -i "s|^${key}=.*|${key}=${esc_pass}|" .env
   done
@@ -146,6 +165,32 @@ else
 fi
 set -a; source .env; set +a
 
+# Si el contenedor ya existe (volumen ya creado), POSTGRES_USER/PASSWORD del
+# compose no se reaplican - solo valen al crear el volumen. Cambiar la
+# password en .env con el volumen ya ahi deja al contenedor con la vieja, y
+# los servicios fallarian con "password authentication failed" sin pista.
+#
+# Ojo: -h 127.0.0.1 NO sirve para esto - el pg_hba.conf de esta imagen trata
+# 127.0.0.1/32 como 'trust' (sin comprobar password), igual que el socket
+# unix. Hay que conectar por la IP real del contenedor en la red Docker, que
+# cae en la regla 'host all all all scram-sha-256' y si exige la password.
+check_pg_credentials() {
+  local container="$1" user="$2" db="$3" password="$4" ip
+  docker inspect "$container" >/dev/null 2>&1 || return 0
+  ip="$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$container")"
+  [ -n "$ip" ] || return 0
+  docker exec -e PGPASSWORD="$password" "$container" \
+    psql -h "$ip" -U "$user" -d "$db" -q -tAc "select 1" >/dev/null 2>&1 \
+    || die "$container ya existe con otras credenciales que las del .env
+        (el volumen se creo con otras). Para aplicar las nuevas hay que
+        recrearlo (BORRA DATOS): ./setup.sh -c && ./setup.sh"
+}
+
+info "Credenciales contra volumenes existentes"
+check_pg_credentials parking-dev-postgres "${DB_USER:-}" "${DB_NAME:-}" "${DB_PASSWORD:-}"
+check_pg_credentials parking-keycloak-db "${KEYCLOAK_DB_USER:-}" "${KEYCLOAK_DB_NAME:-keycloak}" "${KEYCLOAK_DB_PASSWORD:-}"
+ok "Coinciden (o los contenedores todavia no existen)."
+
 wait_healthy() {
   local name="$1" timeout="$2" waited=0
   printf "  ...  esperando a %s%s%s " "$CYAN" "$name" "$OFF"
@@ -165,11 +210,11 @@ wait_healthy() {
   return 1
 }
 
+# Sin 'local -n' (nameref, bash >= 4.3) a proposito: macOS trae bash 3.2 de
+# serie y el shebang es 'env bash', no bash de Homebrew.
 wait_running_containers() {
-  local compose_ref="$1"
-  local -n compose_arr="$compose_ref"
   local names
-  names="$("${compose_arr[@]}" ps --format '{{.Name}}' 2>/dev/null)"
+  names="$("$@" ps --format '{{.Name}}' 2>/dev/null)"
   [ -n "$names" ] || return 0
   while IFS= read -r name; do
     wait_healthy "$name" 90 || FAILED=1
@@ -183,7 +228,7 @@ if [ "$MODE" = "up" ]; then
   "${COMPOSE_DEV[@]}" up -d
 
   info "Esperando a los servicios"
-  wait_running_containers COMPOSE_DEV
+  wait_running_containers "${COMPOSE_DEV[@]}"
 else
   TARGETS=()
   if [ -n "$SUBSET" ]; then
@@ -203,7 +248,7 @@ else
   "${COMPOSE_FULL[@]}" up -d --build "${TARGETS[@]}"
 
   info "Esperando a los servicios"
-  wait_running_containers COMPOSE_FULL
+  wait_running_containers "${COMPOSE_FULL[@]}"
 fi
 
 echo

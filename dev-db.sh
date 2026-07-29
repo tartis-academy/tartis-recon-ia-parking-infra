@@ -164,11 +164,16 @@ if [ "$ACTION" = "up" ]; then
   # datos. Si alguien cambia DB_PASSWORD en el .env con el volumen ya creado,
   # el contenedor sigue con la contrasena vieja y los servicios fallarian con
   # "password authentication failed" sin pista de por que. Lo detectamos aqui.
-  # Con -h 127.0.0.1 forzamos TCP, que es como se conecta Spring: por socket
-  # unix la imagen usa 'trust' y no comprobaria la contrasena.
+  # Ojo: -h 127.0.0.1 NO sirve - el pg_hba.conf de esta imagen trata
+  # 127.0.0.1/32 como 'trust' (no comprueba password), igual que el socket
+  # unix. Hay que conectar por la IP real del contenedor en la red Docker,
+  # que cae en la regla 'host all all all scram-sha-256' y si la exige.
   info "Credenciales del contenedor"
-  if docker exec -e PGPASSWORD="$DB_PASSWORD" "$CONTAINER" \
-       psql -h 127.0.0.1 -U "$DB_USER" -d "$DB_NAME" -q -tAc "select 1" >/dev/null 2>&1; then
+  CONTAINER_IP="$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$CONTAINER")"
+  if [ -z "$CONTAINER_IP" ]; then
+    warn "No se pudo resolver la IP de $CONTAINER, me salto la comprobacion."
+  elif docker exec -e PGPASSWORD="$DB_PASSWORD" "$CONTAINER" \
+       psql -h "$CONTAINER_IP" -U "$DB_USER" -d "$DB_NAME" -q -tAc "select 1" >/dev/null 2>&1; then
     ok "Coinciden con el .env."
   else
     die "El Postgres no acepta DB_USER/DB_PASSWORD del .env: el volumen de datos
