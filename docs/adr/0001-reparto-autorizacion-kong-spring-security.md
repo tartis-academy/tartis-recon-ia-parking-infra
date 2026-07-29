@@ -21,11 +21,13 @@ Al implementar el plugin `jwt` en las 7 rutas de `kong.yml` se comprobó que
 esa lectura no es correcta para el stack elegido (Kong OSS, sin plugin de
 pago):
 
-- El plugin `jwt` de Kong OSS valida **firma** (RS256 contra la clave pública
-  del realm) y **claims registrados** (`claims_to_verify: ["exp"]` explícito,
-  ver `kong/kong.yml`). No decodifica ni interpreta claims custom como
-  `realm_access.roles` — no tiene noción de "rol" en absoluto. Devuelve 401 o
-  deja pasar la petición, nada más.
+- El plugin `jwt` de Kong OSS sí decodifica el payload — lee el claim `iss`
+  (`key_claim_name`, por defecto `iss`) para localizar la credencial del
+  consumer — y valida **firma** (RS256 contra la clave pública del realm) y
+  **claims registrados** (`claims_to_verify: ["exp"]` explícito, ver
+  `kong/kong.yml`). Lo que no hace es **usar** claims custom como
+  `realm_access.roles` para autorizar — no tiene noción de "rol" en
+  absoluto. Devuelve 401 o deja pasar la petición, nada más.
 - El plugin `acl` autoriza por **consumer**, no por rol de usuario. El
   `jwt_secret` está configurado con un único consumer, `keycloak-parking`,
   cuya `key` es el `iss` exacto del token (`http://localhost:8180/realms/parking`).
@@ -50,8 +52,10 @@ OSS no tiene.
   endpoint — vive en Spring Security, mediante `@PreAuthorize` en cada uno
   de los 5 backends (ticket SEC-10, ya planificado y con tests). Cuando el
   token es válido pero el rol es insuficiente, el backend devuelve **403**.
-- Kong sigue siendo el único punto de entrada externo (todas las rutas bajo
-  `/api/v1/`), pero es una capa de autenticación, no de autorización fina.
+- Kong está pensado como único punto de entrada externo bajo `/api/v1/`, pero
+  es una capa de autenticación, no de autorización fina — eso no cambia
+  aunque hoy no sea todavía el único punto de entrada real (ver nota más
+  abajo en Consecuencias).
 
 ## Alternativas descartadas
 
@@ -88,6 +92,25 @@ Docker Compose, sin licencia Enterprise.
   como "problema en configuración de roles en Keycloak/Kong"; este ADR
   matiza esa frase — el rol se configura en Keycloak (claims del token) y
   se **verifica** en Spring Security, no en Kong.
+- **Kong hoy no es el único punto de entrada externo**, aunque esa sea la
+  intención: el frontend llama directo a cada microservicio vía su propio
+  `nginx.conf` (rutas `/v1/...`, sin pasar por Kong ni llevar JWT), y
+  `docker-compose.demo.yml` publica los puertos 8080-8084 de los 5 backends
+  en el host. Este ADR no cambia esa realidad — decide el reparto de
+  autorización para el tráfico que sí pasa por Kong, no cierra el bypass.
+  Cerrarlo (que el frontend hable con Kong por `/api/v1/...` y que solo
+  Kong quede expuesto) queda fuera de alcance de este ADR y sin ticket
+  formal todavía; hasta que se resuelva, cualquier petición directa a un
+  puerto 8080-8084 se salta tanto la validación de Kong como el 401 —
+  Spring Security (SEC-10) sigue siendo la única capa real de defensa en
+  ese camino.
+- El consumer único (`keycloak-parking`) que impide autorizar por rol en
+  Kong (ver Contexto) también impide que Kong **identifique qué usuario**
+  hizo la petición: las cabeceras `X-Consumer-*` que añade son idénticas
+  para `ADMIN`, `OPERARIO` y `USER`, porque los tres autentican contra el
+  mismo consumer. Esto limita GW-06 (correlation-id/logging) — cualquier
+  identificación de usuario en logs o trazas tendrá que salir del propio
+  JWT dentro de cada backend, no de las cabeceras que añade Kong.
 - Pendiente (fuera de este ADR): colección Postman GW-08 con 4 escenarios
   por servicio (sin token / caducado / rol incorrecto / rol correcto) para
   verificar 401 y 403 de extremo a extremo — bloqueada hasta que SEC-10
