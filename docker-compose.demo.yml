@@ -196,6 +196,10 @@ services:
       TICKET_DB_NAME: ${TICKET_DB_NAME}
       TICKET_DB_USER: ${TICKET_DB_USER}
       TICKET_DB_PASSWORD: ${TICKET_DB_PASSWORD}
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+    ports:
+      - "${TICKET_PORT:-8083}:8080"
     depends_on:
       ticket-db:
         condition: service_healthy
