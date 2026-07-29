@@ -15,9 +15,12 @@
 # script. baseline-on-migrate=true evita romper las BD de demo que ya tenian
 # las tablas creadas por el schema.sql anterior.
 #
-# Puertos de host 8080-8084 alineados con el environment de Postman
-# "Parking - Local (dev)" (postman/Parking-Local.postman_environment.json):
-# las colecciones existentes funcionan contra este stack sin tocarlas.
+# GW-07: los 5 microservicios ya no publican puerto de host (sin `ports:`).
+# Solo son alcanzables entre contenedores de la red `parking-shared` (Kong,
+# el resto de servicios) o via Kong en :8000 (rutas /api/v1/...). El
+# environment de Postman "Parking - Local (dev)" que pegaba directo a
+# localhost:8080-8084 queda obsoleto por este cambio; la coleccion de
+# verificacion de GW-08 pega contra Kong.
 
 services:
 
@@ -53,8 +56,6 @@ services:
       VEHICLE_DB_NAME: ${VEHICLE_DB_NAME}
       VEHICLE_DB_USER: ${VEHICLE_DB_USER}
       VEHICLE_DB_PASSWORD: ${VEHICLE_DB_PASSWORD}
-    ports:
-      - "${VEHICLE_PORT:-8080}:8080"
     depends_on:
       vehicle-db:
         condition: service_healthy
@@ -101,8 +102,6 @@ services:
       SPOT_DB_NAME: ${SPOT_DB_NAME}
       SPOT_DB_USER: ${SPOT_DB_USER}
       SPOT_DB_PASSWORD: ${SPOT_DB_PASSWORD}
-    ports:
-      - "${SPOT_PORT:-8081}:8080"
     depends_on:
       spot-db:
         condition: service_healthy
@@ -151,8 +150,6 @@ services:
       TARIFF_DB_NAME: ${TARIFF_DB_NAME}
       TARIFF_DB_USER: ${TARIFF_DB_USER}
       TARIFF_DB_PASSWORD: ${TARIFF_DB_PASSWORD}
-    ports:
-      - "${TARIFF_PORT:-8082}:8080"
     depends_on:
       tariff-db:
         condition: service_healthy
@@ -254,8 +251,6 @@ services:
       # Orquestacion: los defaults de application.properties ya apuntan a
       # estos hostnames de Docker (spot-service:8080, etc.), no hace falta
       # sobreescribirlos aqui.
-    ports:
-      - "${STAY_PORT:-8084}:8080"
     depends_on:
       stay-db:
         condition: service_healthy
