@@ -150,6 +150,12 @@ services:
       TARIFF_DB_NAME: ${TARIFF_DB_NAME}
       TARIFF_DB_USER: ${TARIFF_DB_USER}
       TARIFF_DB_PASSWORD: ${TARIFF_DB_PASSWORD}
+      # SEC-07 (revision PR #44): jwk-set-uri usa el hostname interno de la
+      # red de Docker (donde el contenedor SI llega a Keycloak); issuer se
+      # queda en localhost:8180 porque es el iss real que trae el token y el
+      # mismo valor fijado en kong/kong.yml. No son intercambiables.
+      KEYCLOAK_JWKS_URI: http://keycloak:8080/realms/parking/protocol/openid-connect/certs
+      KEYCLOAK_ISSUER: http://localhost:8180/realms/parking
     depends_on:
       tariff-db:
         condition: service_healthy
