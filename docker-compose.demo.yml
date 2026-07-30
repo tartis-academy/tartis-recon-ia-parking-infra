@@ -172,8 +172,22 @@ services:
       TARIFF_DB_NAME: ${TARIFF_DB_NAME}
       TARIFF_DB_USER: ${TARIFF_DB_USER}
       TARIFF_DB_PASSWORD: ${TARIFF_DB_PASSWORD}
-      # Ver el bloque comentado de vehicle-service. tariff todavia no tiene
-      # SecurityConfig mergeado (PR #44 abierto), mismo motivo que spot.
+      # SEC-07 (revision PR #44): jwk-set-uri usa el hostname interno de la
+      # red de Docker (donde el contenedor SI llega a Keycloak); issuer se
+      # queda en localhost:8180 porque es el iss real que trae el token y el
+      # mismo valor fijado en kong/kong.yml. No son intercambiables.
+      #
+      # [merge 30/07] El diagnostico de arriba es correcto y se conserva tal
+      # cual. Solo cambian los NOMBRES: KEYCLOAK_JWKS_URI/KEYCLOAK_ISSUER no
+      # los lee nadie (no aparecen en ninguna rama de tariff, ni como
+      # ${...} en sus .properties), asi que el contenedor los recibia y los
+      # ignoraba. Estos otros son los nombres canonicos de Spring y los bindea
+      # el solo por relaxed binding, sin tocar ningun .properties. Verificado
+      # arrancando vehicle-service en perfil prod: sin ellos falla con "required
+      # a bean of type JwtDecoder"; con ellos levanta y responde 401/200.
+      #
+      # Se ponen en los 5 servicios, no solo en los 3 que hoy tienen
+      # SecurityConfig, para que los PRs #42 y #44 no repitan el fallo al entrar.
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: ${KEYCLOAK_PUBLIC_URL:-http://localhost:8180}/realms/${KEYCLOAK_REALM:-parking}
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/${KEYCLOAK_REALM:-parking}/protocol/openid-connect/certs
     depends_on:
