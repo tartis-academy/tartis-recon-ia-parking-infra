@@ -149,9 +149,69 @@ ask_master_password() {
   echo
 }
 
+# Anade a un .env que ya existe las claves que se hayan incorporado despues a
+# .env.example.
+#
+# No pisar el .env del usuario es lo correcto, pero tiene un efecto colateral:
+# quien ya tenia el fichero (o sea, todo el que ejecuto setup alguna vez) no
+# se entera nunca de una variable nueva, y re-lanzar setup.sh tampoco se la
+# anade. Se vio con STAY_CLIENT_SECRET: en stay-service no tiene valor por
+# defecto a proposito, asi que su ausencia no degrada nada, tumba el arranque
+# del contenedor entero.
+#
+# Solo anade lo que falta. Nunca modifica ni reordena lo que ya hay.
+backfill_env() {
+  [ -f .env.example ] || return 0
+
+  local missing=() key
+
+  # La clave es lo anterior al primer '=', asi que un valor que lleve '='
+  # dentro no confunde. Las lineas comentadas no empiezan por letra, se caen
+  # solas del patron.
+  while IFS= read -r key; do
+    if ! grep -qE "^[[:space:]]*${key}=" .env; then
+      missing+=("$key")
+    fi
+  done < <(sed -nE 's/^([A-Za-z_][A-Za-z0-9_]*)=.*/\1/p' .env.example)
+
+  if [ "${#missing[@]}" -eq 0 ]; then
+    ok "Sin variables nuevas en .env.example."
+    return 0
+  fi
+
+  # Si .env no termina en salto de linea, la primera clave que anadamos se
+  # pegaria al final de la ultima linea existente.
+  if [ -s .env ] && [ -n "$(tail -c1 .env)" ]; then
+    printf '\n' >> .env
+  fi
+
+  {
+    printf '\n# Anadidas por setup.sh (%s) desde .env.example.\n' "$(date +%Y-%m-%d)"
+    for key in "${missing[@]}"; do
+      grep -m1 -E "^${key}=" .env.example
+    done
+  } >> .env
+
+  warn "Anadidas ${#missing[@]} variables nuevas a .env: ${missing[*]}"
+
+  # Entran con el valor de .env.example, no con la contrasena que el usuario
+  # eligiera en su dia: ask_master_password solo corre al crear el fichero.
+  # Si alguna es de las de password, avisar en vez de dejarlo pasar en
+  # silencio y que luego el contenedor no autentique.
+  local pass_key
+  for key in "${missing[@]}"; do
+    for pass_key in $PASSWORD_KEYS; do
+      if [ "$key" = "$pass_key" ]; then
+        warn "$key ha entrado con el valor por defecto de .env.example, revisala."
+      fi
+    done
+  done
+}
+
 info "Fichero .env"
 if [ -f .env ]; then
   ok ".env ya existe, no lo toco."
+  backfill_env
 elif [ -f .env.example ]; then
   cp .env.example .env
   ok ".env creado desde .env.example."
