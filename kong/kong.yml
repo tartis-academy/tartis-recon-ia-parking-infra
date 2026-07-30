@@ -128,6 +128,7 @@ plugins:
       origins:
         - "http://localhost:8090"
         - "http://localhost:5173"
+        - "http://localhost:5000"
       methods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
       headers: [Accept, Content-Type, Authorization]
       # GW-06: sin Access-Control-Expose-Headers, el navegador recibe la
