@@ -28,11 +28,11 @@ DEMO_PASSWORD="${DEMO_PASSWORD:-Admin.123!}"
 
 _TOKEN=""
 _TOKEN_AT=0
-# El realm usa el lifespan por defecto de Keycloak (300s). Se renueva a los 240
-# para no cortar por los pelos en un script largo: un checkin-traffic.sh con
-# COUNT alto pasa de 5 minutos sin despeinarse y, sin esto, la segunda mitad de
-# la tanda fallaria con 401 y pareceria un bug de la aplicacion.
-_TOKEN_TTL=240
+# Se rellena con el expires_in que devuelve Keycloak, menos un margen. No se
+# hardcodea: si alguien baja el lifespan del realm por debajo del margen fijo
+# vuelven los 401 intermitentes que este helper existe para evitar.
+_TOKEN_TTL=0
+_TOKEN_MARGEN=60
 
 _fetch_token() {
   local response
@@ -47,18 +47,42 @@ _fetch_token() {
       return 1
     }
 
-  _TOKEN=$(printf '%s' "$response" \
-    | python3 -c 'import sys,json;print(json.load(sys.stdin).get("access_token",""))' 2>/dev/null)
+  # Se lee tambien expires_in para no hardcodear cuando renovar.
+  local parsed
+  parsed=$(printf '%s' "$response" \
+    | python3 -c 'import sys,json;d=json.load(sys.stdin);print(d.get("access_token",""),d.get("expires_in",300))')
+
+  _TOKEN="${parsed%% *}"
+  local expires="${parsed##* }"
 
   if [ -z "$_TOKEN" ]; then
     echo "ERROR: Keycloak no devolvio access_token para '$DEMO_USER'." >&2
     echo "       Respuesta: $response" >&2
     return 1
   fi
+
+  # Margen para no cortar por los pelos en un script largo: un
+  # checkin-traffic.sh con COUNT alto pasa de 5 minutos sin despeinarse y, sin
+  # esto, la segunda mitad de la tanda fallaria con 401 y pareceria un bug de
+  # la aplicacion. Si el lifespan fuera menor que el margen, se renueva a la
+  # mitad en vez de en cada peticion.
+  if [ "$expires" -gt $((_TOKEN_MARGEN * 2)) ]; then
+    _TOKEN_TTL=$((expires - _TOKEN_MARGEN))
+  else
+    _TOKEN_TTL=$((expires / 2))
+  fi
+
   _TOKEN_AT=$(date +%s)
 }
 
 # Imprime la cabecera lista para pasar a curl, renovando el token si toca.
+#
+# Devuelve 1 si no hay token. Importante capturarlo en una variable antes de
+# usarlo:  token=$(auth_header) || exit 1
+# Si se llama en linea (curl -H "$(auth_header)"), un fallo produce una
+# cabecera VACIA y set -e no corta, porque es un argumento y no una
+# asignacion: el script seguiria lanzando peticiones sin token y reportaria
+# los 401 como si fueran de la API.
 auth_header() {
   local now
   now=$(date +%s)
@@ -68,13 +92,20 @@ auth_header() {
   printf 'Authorization: Bearer %s' "$_TOKEN"
 }
 
-# Falla pronto y con un mensaje util si Kong no esta delante.
+# Falla pronto y con un mensaje util si falta algo del entorno o Kong no esta.
 require_kong() {
+  if ! command -v python3 >/dev/null 2>&1; then
+    # Sin esto, el 2>/dev/null de _fetch_token se traga el "command not found"
+    # y el mensaje de error acaba culpando a Keycloak.
+    echo "ERROR: hace falta python3 para leer la respuesta de Keycloak." >&2
+    return 1
+  fi
+
   local code
   code=$(curl -s -o /dev/null -w '%{http_code}' "$KONG_URL/api/v1/spots" 2>/dev/null || echo 000)
   if [ "$code" = "000" ]; then
     echo "ERROR: Kong no responde en $KONG_URL." >&2
-    echo "       Levanta el stack: ./setup.sh full" >&2
+    echo "       Levanta el stack: ./setup.sh -f" >&2
     return 1
   fi
 }

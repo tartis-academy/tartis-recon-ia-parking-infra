@@ -30,6 +30,10 @@ ok()   { echo "  ${GREEN}OK${OFF}  $1"; }
 
 require_kong
 
+# Se captura una sola vez y con "|| exit 1": en linea, un fallo de
+# auth_header produciria una cabecera vacia sin cortar el script.
+AUTH=$(auth_header) || exit 1
+
 # Un 401/403 aqui no es "el dato esta mal", es el token: merece un aviso
 # explicito porque en la prueba E2E del 30/07 un 401 disfrazado de error de
 # negocio costo un buen rato de diagnostico.
@@ -43,7 +47,7 @@ warn_if_auth() {
 info "Tarifas activas (via Kong, como $DEMO_USER)"
 for type in "${TYPES[@]}"; do
   code=$(curl -s -X POST "$KONG_URL/api/v1/tariffs" \
-    -H "$(auth_header)" \
+    -H "$AUTH" \
     -H "Content-Type: application/json" \
     -d "{\"name\":\"Demo $type\",\"type\":\"$type\",\"pricePerMinute\":0.05,\"basePrice\":1.0,\"active\":true}" \
     -o /dev/null -w "%{http_code}")
@@ -56,7 +60,7 @@ info "Plazas libres ($SPOTS_PER_TYPE por tipo)"
 for type in "${TYPES[@]}"; do
   for _ in $(seq 1 "$SPOTS_PER_TYPE"); do
     code=$(curl -s -X POST "$KONG_URL/api/v1/spots" \
-      -H "$(auth_header)" \
+      -H "$AUTH" \
       -H "Content-Type: application/json" \
       -d "{\"type\":\"$type\"}" \
       -o /dev/null -w "%{http_code}")

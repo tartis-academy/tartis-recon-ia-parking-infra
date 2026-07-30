@@ -309,6 +309,13 @@ services:
       STAY_CLIENT_ID: ${STAY_CLIENT_ID:-parking-stay-service}
       STAY_CLIENT_SECRET: ${STAY_CLIENT_SECRET:?falta STAY_CLIENT_SECRET en .env}
       KEYCLOAK_TOKEN_URI: http://keycloak:8080/realms/${KEYCLOAK_REALM:-parking}/protocol/openid-connect/token
+      # stay es quien DECLARA el exchange y las dos colas de stay-closed-v1,
+      # asi que sin credenciales no se crea la topologia. Faltaban: solo las
+      # tenia ticket-service (ASY-05). Se vio al levantar el stack completo,
+      # con stay en unhealthy por el indicador de salud de RabbitMQ del
+      # actuator y sin spot-service-stay-closed-queue en el broker.
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
     depends_on:
       stay-db:
         condition: service_healthy
@@ -341,10 +348,18 @@ services:
     ports:
       - "${FRONTEND_PORT:-8090}:80"
     depends_on:
-      - vehicle-service
-      - spot-service
-      - tariff-service
-      - stay-service
+      # Depende de Kong, NO de los microservicios. Su nginx dejo de hacer
+      # proxy_pass directo a cada micro y ahora solo habla con el gateway, asi
+      # que la lista anterior (vehicle/spot/tariff/stay) quedo obsoleta y le
+      # faltaba el unico upstream que de verdad usa.
+      #
+      # Y no es cosmetico: nginx resuelve los hostnames de `proxy_pass`
+      # literales AL CARGAR LA CONFIGURACION, no en cada peticion. Si el
+      # contenedor del frontend arranca antes que Kong, nginx muere con
+      # "host not found in upstream 'kong'" y restart: unless-stopped lo deja
+      # en bucle de reinicio.
+      kong:
+        condition: service_healthy
     networks:
       - parking-shared
 

@@ -91,8 +91,30 @@ se lleve el realm por delante.
 El realm `parking` vive como código en [`keycloak/realm-export.dev-only.json`](keycloak/realm-export.dev-only.json)
 y se importa solo al arrancar (`start-dev --import-realm`): un entorno recién
 levantado ya tiene los roles `ADMIN`/`OPERARIO`/`USER`, el cliente público
-`parking-frontend` y tres usuarios de prueba (`admin.test`, `operario.test`,
-`user.test`, contraseñas `<Rol>.123!`). El realm incluye además un par de
+`parking-frontend`, el cliente de servicio `parking-stay-service` (con el que
+`stay-service` llama a los demás microservicios) y tres usuarios de prueba
+(`admin.test`, `operario.test`, `user.test`, contraseñas `<Rol>.123!`).
+
+> [!WARNING]
+> **`--import-realm` solo importa si el realm NO existe.** Si ya tenías el
+> stack levantado antes de un cambio en `realm-export.dev-only.json`, tu
+> Keycloak **no** recibirá lo nuevo: seguirá con el realm viejo, sin avisar.
+> El síntoma típico es un servicio que arranca bien y falla en su primera
+> llamada saliente, lo que parece un bug de ese servicio y no lo es.
+>
+> Para aplicar un cambio del realm hay que recrear su volumen:
+>
+> ```bash
+> docker compose -f docker-compose.yml -f docker-compose.demo.yml down
+> docker volume rm tartis-recon-ia-parking-infra_parking-keycloak-db-data
+> ./setup.sh -f
+> ```
+>
+> Y acuérdate de rehacer el `.env` desde `.env.example` cuando aparezcan
+> variables nuevas: `STAY_CLIENT_SECRET` no tiene valor por defecto y el
+> compose falla a propósito si falta.
+
+El realm incluye además un par de
 claves RS256 **fijas** (`components.org.keycloak.keys.KeyProvider`) en vez de
 dejar que Keycloak genere unas nuevas en cada `./setup.sh -c` — si no,
 la clave pública que Kong tiene hardcodeada dejaría de coincidir cada vez que

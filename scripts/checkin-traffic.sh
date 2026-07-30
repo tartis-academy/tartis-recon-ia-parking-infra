@@ -45,8 +45,15 @@ echo "==> ${#plates[@]} check-ins contra $KONG_URL/api/v1/stays (delay ${MIN_DEL
 
 for plate in "${plates[@]}"; do
   type="${TYPES[$((RANDOM % ${#TYPES[@]}))]}"
+
+  # Se captura en cada vuelta (auth_header renueva el token cuando toca) pero
+  # en una variable y con "|| exit 1", no en linea: si falla, una cabecera
+  # vacia haria que el script siguiera lanzando peticiones sin token y
+  # reportara los 401 como si fueran de la API.
+  auth=$(auth_header) || exit 1
+
   response=$(curl -s -w '\n%{http_code}' -X POST "$KONG_URL/api/v1/stays/check-in" \
-    -H "$(auth_header)" \
+    -H "$auth" \
     -H "Content-Type: application/json" \
     -d "{\"plate\":\"$plate\",\"vehicleType\":\"$type\"}")
   status="${response##*$'\n'}"
@@ -66,11 +73,10 @@ done
 
 echo "==> $ok ok, $fail fallidos de ${#plates[@]}"
 
-# El 400 "La matricula no es valida" de stay-service enmascara un 401: stay no
-# manda Authorization en sus llamadas salientes a vehicle-service. Es bug de
-# stay-service, no de este script ni del token de aqui. Ver la nota E2E del
-# 30/07 en el vault y el issue vehicleService#50.
+# Si falla todo, lo mas probable es que falte sembrar. El 401 enmascarado como
+# 400 "La matricula no es valida" que habia aqui antes ya no aplica:
+# stay-service propaga su token de servicio desde el PR del check-in.
 if [ "$fail" -gt 0 ] && [ "$ok" -eq 0 ]; then
-  echo "AVISO: 0 exitos. Si el cuerpo dice \"La matricula ... no es valida\", es el" >&2
-  echo "       bug conocido de stay-service (no propaga el token), no tu token." >&2
+  echo "AVISO: 0 exitos de $((ok + fail)). Comprueba que hay tarifas activas y" >&2
+  echo "       plazas libres: ./scripts/seed-demo-data.sh" >&2
 fi
