@@ -123,24 +123,86 @@ sin avisar. El `key` del `jwt_secret` es el `iss` exacto del token
 Kong solo resuelve si el token es válido y está vigente (401 si no). El
 plugin `jwt` no lee `realm_access.roles` — la autorización por rol vive en
 Spring Security (`@PreAuthorize`, ticket SEC-10, pendiente en cada backend),
-que devuelve 403. Decisión documentada, pendiente el ADR formal.
+que devuelve 403. Ver [ADR-0001](docs/adr/0001-reparto-autorizacion-kong-spring-security.md).
+
+`uri_param_names: []` en las 7 rutas: por defecto ese campo vale `["jwt"]`, así
+que sin fijarlo Kong aceptaría el token por query string y acabaría en el
+access log, en el historial del navegador y en la cabecera `Referer`.
 
 Pendiente (fuera de este repo o de esta sesión): CORS ya configurado en Kong
 para `:8090`/`:5173`, pero el frontend sigue llamando directo a cada
 microservicio (su `nginx.conf`, en el repo del frontend) en vez de a Kong —
 y con la ruta `/v1/...` vieja, no `/api/v1/...`. La ruta SSE de `stay-service`
-(SSE-08) todavía no existe; cuando se añada necesita su propia ruta sin este
-plugin (valida por query param, no por cabecera).
+(SSE-08) todavía no existe; cuando se añada necesita su propia ruta que lea el
+token de la query string (`EventSource` no admite cabeceras) y que redacte esa
+query string en el log.
 
 Verificar (con el stack `full` arriba, token de arriba en `$TOKEN`):
 
 ```bash
 curl -i http://localhost:8000/api/v1/vehicles                              # sin token -> 401
 curl -i http://localhost:8000/api/v1/vehicles -H "Authorization: Bearer $TOKEN"  # token valido
+curl -i "http://localhost:8000/api/v1/vehicles?jwt=$TOKEN"                 # token en la URL -> 401
 ```
 
 Cambios en `kong.yml` requieren `docker compose restart kong` (no hay
 Admin API de escritura en DB-less).
+
+### Trazabilidad (GW-06)
+
+Kong y Spring se reparten la traza, porque Kong solo puede dar la mitad:
+
+| Quién | Qué aporta |
+|---|---|
+| Kong (`correlation-id`) | identidad de **petición** — `X-Correlation-ID`, propagada upstream |
+| Cada micro (`CorrelationIdFilter`) | mete ese id en el MDC de sus logs |
+| Cada micro (pendiente, tras SEC-07) | identidad de **usuario** — `sub` del JWT en el MDC |
+
+Kong no puede identificar al usuario: el plugin `jwt` casa el token contra el
+consumer cuyo `key` es el claim `iss`, y `admin.test`, `operario.test` y
+`user.test` salen todos del mismo issuer, así que mapean al mismo consumer
+`keycloak-parking`. Las cabeceras `X-Consumer-*` que Kong inyecta valen igual
+para los tres y no sirven para auditar. Por eso la identidad sale del JWT dentro
+de cada backend, y los logs de los seis contenedores se cruzan por el
+correlation-id.
+
+`echo_downstream: true` devuelve la cabecera al cliente, y `cors` la lista en
+`exposed_headers` — sin eso el navegador la recibe pero el JavaScript del front
+no puede leerla, así que el usuario no podría aportarla al reportar un fallo.
+
+El plugin `file-log` escribe un registro JSON por petición a `/dev/stdout`, que
+es donde Kong ya escribe, así que lo recoge `docker logs parking-kong`. **No
+filtra el token**: el serializer de Kong redacta de oficio `Authorization` y
+`Proxy-Authorization`. Lo que **no** redacta es la query string, y la duplica en
+`request.uri`, `request.url` y `request.querystring` — irrelevante en estas 7
+rutas, crítico en la ruta SSE cuando llegue (ver el comentario en `kong.yml`).
+
+Verificar:
+
+```bash
+# la cabecera llega al cliente, incluso en un 401
+curl -si http://localhost:8000/api/v1/tariffs | grep -i x-correlation-id
+
+# el registro JSON sale y el token NO: debe imprimir "authorization":"REDACTED"
+docker logs parking-kong --tail 1 | grep -o '"authorization":"[^"]*"'
+```
+
+### Validación automática
+
+[`scripts/ci/validate_kong.py`](scripts/ci/validate_kong.py) comprueba los
+invariantes de GW-03 y GW-06 sobre `kong.yml`: que ninguna ruta se quede sin
+`jwt`, que todas verifiquen `exp`, que no acepten el token por query string ni
+por cookie, y que la trazabilidad esté completa. Corre en cada PR desde
+`.github/workflows/validate-infra.yml`, y en local sin necesidad de levantar
+nada:
+
+```bash
+python3 scripts/ci/validate_kong.py kong/kong.yml
+```
+
+Las excepciones (hoy solo la futura ruta SSE) están declaradas como constantes
+al principio del script, con su justificación. Ampliar ese set requiere tocar el
+fichero y que se vea en la review.
 
 ## RabbitMQ
 
