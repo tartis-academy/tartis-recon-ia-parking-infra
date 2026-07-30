@@ -279,12 +279,22 @@ services:
       # estos hostnames de Docker (spot-service:8080, etc.), no hace falta
       # sobreescribirlos aqui.
       #
-      # Ver el bloque comentado de vehicle-service. Ojo: esto arregla que stay
-      # ARRANQUE y que valide los tokens que RECIBE. NO arregla que stay no
-      # mande Authorization en sus llamadas salientes (el 401 del check-in),
-      # que es codigo de stay-service, no infra.
+      # Ver el bloque comentado de vehicle-service. Esto cubre los tokens que
+      # stay RECIBE.
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: ${KEYCLOAK_PUBLIC_URL:-http://localhost:8180}/realms/${KEYCLOAK_REALM:-parking}
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/${KEYCLOAK_REALM:-parking}/protocol/openid-connect/certs
+      # Y esto los que stay EMITE. Es el unico microservicio que llama a otros
+      # por HTTP, y lo hace sin usuario detras, asi que necesita un token
+      # propio via client_credentials. Sin esto sus 4 llamadas salientes van
+      # sin Authorization y el check-in falla entero con un 401 que ademas se
+      # enmascara como "matricula no valida".
+      #
+      # token-uri interno (keycloak:8080) porque lo pide desde el contenedor;
+      # el `iss` del token que sale sigue siendo el publico gracias a
+      # KC_HOSTNAME, que es lo que esperan los otros servicios.
+      STAY_CLIENT_ID: ${STAY_CLIENT_ID:-parking-stay-service}
+      STAY_CLIENT_SECRET: ${STAY_CLIENT_SECRET:?falta STAY_CLIENT_SECRET en .env}
+      KEYCLOAK_TOKEN_URI: http://keycloak:8080/realms/${KEYCLOAK_REALM:-parking}/protocol/openid-connect/token
     depends_on:
       stay-db:
         condition: service_healthy

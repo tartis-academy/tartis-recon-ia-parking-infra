@@ -40,9 +40,28 @@
       "attributes": {
         "pkce.code.challenge.method": "S256"
       }
+    },
+    {
+      "clientId": "parking-stay-service",
+      "description": "Token de servicio de stay-service (client_credentials) para llamar a vehicle/spot/tariff/ticket. Su cuenta lleva ADMIN porque POST /v1/vehicles lo exige: mas permiso del deseable, ver deuda tecnica. Secreto de DEV = STAY_CLIENT_SECRET del .env.",
+      "enabled": true,
+      "publicClient": false,
+      "protocol": "openid-connect",
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "secret": "stay-service-dev-secret-no-usar-fuera-de-local"
     }
   ],
   "users": [
+    {
+      "username": "service-account-parking-stay-service",
+      "enabled": true,
+      "serviceAccountClientId": "parking-stay-service",
+      "realmRoles": [
+        "ADMIN"
+      ]
+    },
     {
       "username": "admin.test",
       "enabled": true,
