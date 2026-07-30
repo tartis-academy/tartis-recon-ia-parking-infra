@@ -56,6 +56,23 @@ services:
       VEHICLE_DB_NAME: ${VEHICLE_DB_NAME}
       VEHICLE_DB_USER: ${VEHICLE_DB_USER}
       VEHICLE_DB_PASSWORD: ${VEHICLE_DB_PASSWORD}
+      # Resource server (SEC): issuer-uri solo existe en application-dev.properties,
+      # asi que en perfil prod el contexto no arranca ("required a bean of type
+      # JwtDecoder that could not be found"). Se inyecta desde aqui en vez de
+      # copiar la linea al .properties de prod, porque los dos valores son
+      # distintos y ninguno sirve para lo del otro:
+      #
+      #   jwk-set-uri -> por donde el micro DESCARGA la clave publica. Tiene que
+      #                  ser la red interna (keycloak:8080); localhost:8180 no
+      #                  resuelve dentro del contenedor.
+      #   issuer-uri  -> que `iss` EXIGE el micro en el token. Tiene que ser el
+      #                  publico, el mismo que Kong tiene como key del consumer.
+      #
+      # Con los dos puestos, Spring construye el decoder desde jwk-set-uri (sin
+      # discovery, que es lo que fallaria) y usa issuer-uri solo como validador
+      # del claim iss. Ver KC_HOSTNAME en docker-compose.yml.
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: ${KEYCLOAK_PUBLIC_URL:-http://localhost:8180}/realms/${KEYCLOAK_REALM:-parking}
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/${KEYCLOAK_REALM:-parking}/protocol/openid-connect/certs
     depends_on:
       vehicle-db:
         condition: service_healthy
@@ -102,6 +119,11 @@ services:
       SPOT_DB_NAME: ${SPOT_DB_NAME}
       SPOT_DB_USER: ${SPOT_DB_USER}
       SPOT_DB_PASSWORD: ${SPOT_DB_PASSWORD}
+      # Ver el bloque comentado de vehicle-service. spot todavia no tiene
+      # SecurityConfig mergeado (PR #42 abierto), pero se deja puesto para que
+      # el dia que entre no repita el mismo fallo de arranque en prod.
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: ${KEYCLOAK_PUBLIC_URL:-http://localhost:8180}/realms/${KEYCLOAK_REALM:-parking}
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/${KEYCLOAK_REALM:-parking}/protocol/openid-connect/certs
     depends_on:
       spot-db:
         condition: service_healthy
@@ -154,8 +176,20 @@ services:
       # red de Docker (donde el contenedor SI llega a Keycloak); issuer se
       # queda en localhost:8180 porque es el iss real que trae el token y el
       # mismo valor fijado en kong/kong.yml. No son intercambiables.
-      KEYCLOAK_JWKS_URI: http://keycloak:8080/realms/parking/protocol/openid-connect/certs
-      KEYCLOAK_ISSUER: http://localhost:8180/realms/parking
+      #
+      # [merge 30/07] El diagnostico de arriba es correcto y se conserva tal
+      # cual. Solo cambian los NOMBRES: KEYCLOAK_JWKS_URI/KEYCLOAK_ISSUER no
+      # los lee nadie (no aparecen en ninguna rama de tariff, ni como
+      # ${...} en sus .properties), asi que el contenedor los recibia y los
+      # ignoraba. Estos otros son los nombres canonicos de Spring y los bindea
+      # el solo por relaxed binding, sin tocar ningun .properties. Verificado
+      # arrancando vehicle-service en perfil prod: sin ellos falla con "required
+      # a bean of type JwtDecoder"; con ellos levanta y responde 401/200.
+      #
+      # Se ponen en los 5 servicios, no solo en los 3 que hoy tienen
+      # SecurityConfig, para que los PRs #42 y #44 no repitan el fallo al entrar.
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: ${KEYCLOAK_PUBLIC_URL:-http://localhost:8180}/realms/${KEYCLOAK_REALM:-parking}
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/${KEYCLOAK_REALM:-parking}/protocol/openid-connect/certs
     depends_on:
       tariff-db:
         condition: service_healthy
@@ -204,8 +238,9 @@ services:
       TICKET_DB_PASSWORD: ${TICKET_DB_PASSWORD}
       RABBITMQ_USER: ${RABBITMQ_USER}
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
-    ports:
-      - "${TICKET_PORT:-8083}:8080"
+      # Ver el bloque comentado de vehicle-service.
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: ${KEYCLOAK_PUBLIC_URL:-http://localhost:8180}/realms/${KEYCLOAK_REALM:-parking}
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/${KEYCLOAK_REALM:-parking}/protocol/openid-connect/certs
     depends_on:
       ticket-db:
         condition: service_healthy
@@ -257,6 +292,30 @@ services:
       # Orquestacion: los defaults de application.properties ya apuntan a
       # estos hostnames de Docker (spot-service:8080, etc.), no hace falta
       # sobreescribirlos aqui.
+      #
+      # Ver el bloque comentado de vehicle-service. Esto cubre los tokens que
+      # stay RECIBE.
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: ${KEYCLOAK_PUBLIC_URL:-http://localhost:8180}/realms/${KEYCLOAK_REALM:-parking}
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/${KEYCLOAK_REALM:-parking}/protocol/openid-connect/certs
+      # Y esto los que stay EMITE. Es el unico microservicio que llama a otros
+      # por HTTP, y lo hace sin usuario detras, asi que necesita un token
+      # propio via client_credentials. Sin esto sus 4 llamadas salientes van
+      # sin Authorization y el check-in falla entero con un 401 que ademas se
+      # enmascara como "matricula no valida".
+      #
+      # token-uri interno (keycloak:8080) porque lo pide desde el contenedor;
+      # el `iss` del token que sale sigue siendo el publico gracias a
+      # KC_HOSTNAME, que es lo que esperan los otros servicios.
+      STAY_CLIENT_ID: ${STAY_CLIENT_ID:-parking-stay-service}
+      STAY_CLIENT_SECRET: ${STAY_CLIENT_SECRET:?falta STAY_CLIENT_SECRET en .env}
+      KEYCLOAK_TOKEN_URI: http://keycloak:8080/realms/${KEYCLOAK_REALM:-parking}/protocol/openid-connect/token
+      # stay es quien DECLARA el exchange y las dos colas de stay-closed-v1,
+      # asi que sin credenciales no se crea la topologia. Faltaban: solo las
+      # tenia ticket-service (ASY-05). Se vio al levantar el stack completo,
+      # con stay en unhealthy por el indicador de salud de RabbitMQ del
+      # actuator y sin spot-service-stay-closed-queue en el broker.
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
     depends_on:
       stay-db:
         condition: service_healthy
@@ -289,10 +348,18 @@ services:
     ports:
       - "${FRONTEND_PORT:-8090}:80"
     depends_on:
-      - vehicle-service
-      - spot-service
-      - tariff-service
-      - stay-service
+      # Depende de Kong, NO de los microservicios. Su nginx dejo de hacer
+      # proxy_pass directo a cada micro y ahora solo habla con el gateway, asi
+      # que la lista anterior (vehicle/spot/tariff/stay) quedo obsoleta y le
+      # faltaba el unico upstream que de verdad usa.
+      #
+      # Y no es cosmetico: nginx resuelve los hostnames de `proxy_pass`
+      # literales AL CARGAR LA CONFIGURACION, no en cada peticion. Si el
+      # contenedor del frontend arranca antes que Kong, nginx muere con
+      # "host not found in upstream 'kong'" y restart: unless-stopped lo deja
+      # en bucle de reinicio.
+      kong:
+        condition: service_healthy
     networks:
       - parking-shared
 

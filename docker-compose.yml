@@ -42,6 +42,20 @@ services:
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USER:?falta KEYCLOAK_ADMIN_USER en .env}
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?falta KEYCLOAK_ADMIN_PASSWORD en .env}
       KC_HEALTH_ENABLED: "true"
+      # El `iss` de los tokens tiene que ser ESTABLE. Sin KC_HOSTNAME, start-dev
+      # lo deriva del Host de la peticion: entrando por localhost:8180 sale
+      # "http://localhost:8180/realms/parking" y entrando por keycloak:8080 sale
+      # otro distinto. Kong casa el token contra el consumer cuya `key` es
+      # exactamente ese iss (kong/kong.yml), asi que un iss variable son 401
+      # intermitentes segun por donde se haya pedido el token.
+      KC_HOSTNAME: ${KEYCLOAK_PUBLIC_URL:-http://localhost:8180}
+      # Con KC_HOSTNAME fijo, las URLs de servidor a servidor (JWKS, token)
+      # tambien apuntarian a localhost:8180, que dentro de un contenedor no
+      # resuelve. Esto deja que las llamadas backchannel usen el host real de
+      # la peticion (keycloak:8080) sin mover el iss, que sigue siendo el
+      # publico. Es lo que permite a los micros validar firma por la red
+      # interna y seguir esperando el iss publico.
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
     ports:
       - "${KEYCLOAK_PORT:-8180}:8080"
     volumes:
