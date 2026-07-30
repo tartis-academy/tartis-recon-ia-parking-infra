@@ -4,6 +4,9 @@
 # entrada de vehiculos para la demo (o para un smoke test reproducible en
 # CI). Corre ./scripts/seed-demo-data.sh antes, o no habra plazas/tarifas.
 #
+# Va contra Kong con un token real (ver scripts/lib/demo-auth.sh), que se
+# renueva solo: el lifespan del realm son 300s y una tanda larga los pasa.
+#
 # Uso:
 #   ./scripts/checkin-traffic.sh                    # 20 check-ins, matriculas aleatorias
 #   COUNT=50 MIN_DELAY=1 MAX_DELAY=3 ./scripts/checkin-traffic.sh
@@ -11,7 +14,9 @@
 #
 set -euo pipefail
 
-BASE_URL_STAY="${BASE_URL_STAY:-http://localhost:8084}"
+# shellcheck source=lib/demo-auth.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/demo-auth.sh"
+
 COUNT="${COUNT:-20}"
 MIN_DELAY="${MIN_DELAY:-2}"
 MAX_DELAY="${MAX_DELAY:-5}"
@@ -25,6 +30,8 @@ random_plate() {
 ok=0
 fail=0
 
+require_kong
+
 if [ -n "${PLATES:-}" ]; then
   read -r -a plates <<<"$PLATES"
 else
@@ -34,11 +41,12 @@ else
   done
 fi
 
-echo "==> ${#plates[@]} check-ins contra $BASE_URL_STAY (delay ${MIN_DELAY}-${MAX_DELAY}s)"
+echo "==> ${#plates[@]} check-ins contra $KONG_URL/api/v1/stays (delay ${MIN_DELAY}-${MAX_DELAY}s, como $DEMO_USER)"
 
 for plate in "${plates[@]}"; do
   type="${TYPES[$((RANDOM % ${#TYPES[@]}))]}"
-  response=$(curl -s -w '\n%{http_code}' -X POST "$BASE_URL_STAY/v1/stays/check-in" \
+  response=$(curl -s -w '\n%{http_code}' -X POST "$KONG_URL/api/v1/stays/check-in" \
+    -H "$(auth_header)" \
     -H "Content-Type: application/json" \
     -d "{\"plate\":\"$plate\",\"vehicleType\":\"$type\"}")
   status="${response##*$'\n'}"
@@ -57,3 +65,12 @@ for plate in "${plates[@]}"; do
 done
 
 echo "==> $ok ok, $fail fallidos de ${#plates[@]}"
+
+# El 400 "La matricula no es valida" de stay-service enmascara un 401: stay no
+# manda Authorization en sus llamadas salientes a vehicle-service. Es bug de
+# stay-service, no de este script ni del token de aqui. Ver la nota E2E del
+# 30/07 en el vault y el issue vehicleService#50.
+if [ "$fail" -gt 0 ] && [ "$ok" -eq 0 ]; then
+  echo "AVISO: 0 exitos. Si el cuerpo dice \"La matricula ... no es valida\", es el" >&2
+  echo "       bug conocido de stay-service (no propaga el token), no tu token." >&2
+fi

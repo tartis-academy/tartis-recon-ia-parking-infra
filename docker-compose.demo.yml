@@ -56,6 +56,23 @@ services:
       VEHICLE_DB_NAME: ${VEHICLE_DB_NAME}
       VEHICLE_DB_USER: ${VEHICLE_DB_USER}
       VEHICLE_DB_PASSWORD: ${VEHICLE_DB_PASSWORD}
+      # Resource server (SEC): issuer-uri solo existe en application-dev.properties,
+      # asi que en perfil prod el contexto no arranca ("required a bean of type
+      # JwtDecoder that could not be found"). Se inyecta desde aqui en vez de
+      # copiar la linea al .properties de prod, porque los dos valores son
+      # distintos y ninguno sirve para lo del otro:
+      #
+      #   jwk-set-uri -> por donde el micro DESCARGA la clave publica. Tiene que
+      #                  ser la red interna (keycloak:8080); localhost:8180 no
+      #                  resuelve dentro del contenedor.
+      #   issuer-uri  -> que `iss` EXIGE el micro en el token. Tiene que ser el
+      #                  publico, el mismo que Kong tiene como key del consumer.
+      #
+      # Con los dos puestos, Spring construye el decoder desde jwk-set-uri (sin
+      # discovery, que es lo que fallaria) y usa issuer-uri solo como validador
+      # del claim iss. Ver KC_HOSTNAME en docker-compose.yml.
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: ${KEYCLOAK_PUBLIC_URL:-http://localhost:8180}/realms/${KEYCLOAK_REALM:-parking}
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/${KEYCLOAK_REALM:-parking}/protocol/openid-connect/certs
     depends_on:
       vehicle-db:
         condition: service_healthy
@@ -102,6 +119,11 @@ services:
       SPOT_DB_NAME: ${SPOT_DB_NAME}
       SPOT_DB_USER: ${SPOT_DB_USER}
       SPOT_DB_PASSWORD: ${SPOT_DB_PASSWORD}
+      # Ver el bloque comentado de vehicle-service. spot todavia no tiene
+      # SecurityConfig mergeado (PR #42 abierto), pero se deja puesto para que
+      # el dia que entre no repita el mismo fallo de arranque en prod.
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: ${KEYCLOAK_PUBLIC_URL:-http://localhost:8180}/realms/${KEYCLOAK_REALM:-parking}
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/${KEYCLOAK_REALM:-parking}/protocol/openid-connect/certs
     depends_on:
       spot-db:
         condition: service_healthy
@@ -150,6 +172,10 @@ services:
       TARIFF_DB_NAME: ${TARIFF_DB_NAME}
       TARIFF_DB_USER: ${TARIFF_DB_USER}
       TARIFF_DB_PASSWORD: ${TARIFF_DB_PASSWORD}
+      # Ver el bloque comentado de vehicle-service. tariff todavia no tiene
+      # SecurityConfig mergeado (PR #44 abierto), mismo motivo que spot.
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: ${KEYCLOAK_PUBLIC_URL:-http://localhost:8180}/realms/${KEYCLOAK_REALM:-parking}
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/${KEYCLOAK_REALM:-parking}/protocol/openid-connect/certs
     depends_on:
       tariff-db:
         condition: service_healthy
@@ -198,8 +224,9 @@ services:
       TICKET_DB_PASSWORD: ${TICKET_DB_PASSWORD}
       RABBITMQ_USER: ${RABBITMQ_USER}
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
-    ports:
-      - "${TICKET_PORT:-8083}:8080"
+      # Ver el bloque comentado de vehicle-service.
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: ${KEYCLOAK_PUBLIC_URL:-http://localhost:8180}/realms/${KEYCLOAK_REALM:-parking}
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/${KEYCLOAK_REALM:-parking}/protocol/openid-connect/certs
     depends_on:
       ticket-db:
         condition: service_healthy
@@ -251,6 +278,13 @@ services:
       # Orquestacion: los defaults de application.properties ya apuntan a
       # estos hostnames de Docker (spot-service:8080, etc.), no hace falta
       # sobreescribirlos aqui.
+      #
+      # Ver el bloque comentado de vehicle-service. Ojo: esto arregla que stay
+      # ARRANQUE y que valide los tokens que RECIBE. NO arregla que stay no
+      # mande Authorization en sus llamadas salientes (el 401 del check-in),
+      # que es codigo de stay-service, no infra.
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: ${KEYCLOAK_PUBLIC_URL:-http://localhost:8180}/realms/${KEYCLOAK_REALM:-parking}
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/${KEYCLOAK_REALM:-parking}/protocol/openid-connect/certs
     depends_on:
       stay-db:
         condition: service_healthy
