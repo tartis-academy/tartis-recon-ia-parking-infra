@@ -119,11 +119,16 @@ services:
       SPOT_DB_NAME: ${SPOT_DB_NAME}
       SPOT_DB_USER: ${SPOT_DB_USER}
       SPOT_DB_PASSWORD: ${SPOT_DB_PASSWORD}
-      # Ver el bloque comentado de vehicle-service. spot todavia no tiene
-      # SecurityConfig mergeado (PR #42 abierto), pero se deja puesto para que
-      # el dia que entre no repita el mismo fallo de arranque en prod.
+      # Ver el bloque comentado de vehicle-service. spot ya tiene SecurityConfig
+      # (SEC-06, mergeado en release).
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: ${KEYCLOAK_PUBLIC_URL:-http://localhost:8180}/realms/${KEYCLOAK_REALM:-parking}
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/${KEYCLOAK_REALM:-parking}/protocol/openid-connect/certs
+      # ASY-06/07 (mergeado en release el 30/07): spot-service ahora consume
+      # RabbitMQ (SpotEventListenerAdapter). Sin estas dos, spring.rabbitmq.username/
+      # password caen al default "guest" del .properties y el contenedor no
+      # arranca (ACCESS_REFUSED, "guest" solo esta permitido desde localhost).
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
     depends_on:
       spot-db:
         condition: service_healthy
