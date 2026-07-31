@@ -139,6 +139,11 @@ plugins:
         - "http://localhost:8090"
         - "http://localhost:5173"
         - "http://localhost:5000"
+        # mfe-entryexit/mfe-admin llaman a Kong directo desde el navegador (no
+        # tienen su propio reverse proxy como el shell), asi que necesitan
+        # estar en la lista aunque el shell nunca les haga de intermediario.
+        - "http://localhost:5001"
+        - "http://localhost:5002"
       methods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
       headers: [Accept, Content-Type, Authorization]
       # GW-06: sin Access-Control-Expose-Headers, el navegador recibe la
