@@ -53,19 +53,6 @@ services:
               claims_to_verify: ["exp"]
               uri_param_names: []
 
-  - name: ticket-service-receipts
-    url: http://ticket-service:8080/v1/receipts
-    routes:
-      - name: ticket-service-receipts-route
-        paths:
-          - /api/v1/receipts
-        strip_path: true
-        plugins:
-          - name: jwt
-            config:
-              claims_to_verify: ["exp"]
-              uri_param_names: []
-
   - name: ticket-service-tickets
     url: http://ticket-service:8080/v1/tickets
     routes:
@@ -85,7 +72,11 @@ services:
   #
   #   1. jwt leyendo el token de la query string, no de la cabecera: la API
   #      EventSource del navegador no permite cabeceras propias. Es decir
-  #      uri_param_names: ["jwt"] y header_names: [], la unica excepcion al
+  #      uri_param_names: ["access_token"] (NO "jwt", el default de Kong: el
+  #      front manda ?token=, Kong por defecto esperaria ?jwt= y Spring lee
+  #      ?access_token=; los tres se alinean en access_token -RFC 6750-,
+  #      el unico nombre con el que el resolver de Spring detecta token
+  #      smuggling de fabrica) y header_names: [], la unica excepcion al
   #      resto del fichero.
   #   2. file-log a nivel de route con custom_fields_by_lua, porque el
   #      serializer de Kong NO redacta la query string y el token acabaria en
@@ -99,6 +90,25 @@ services:
       - name: stay-service-route
         paths:
           - /api/v1/stays
+        strip_path: true
+        plugins:
+          - name: jwt
+            config:
+              claims_to_verify: ["exp"]
+              uri_param_names: []
+
+  # ActiveStayRestAdapter expone /v1/activeStay en stay-service, la unica ruta
+  # en camelCase del proyecto (el resto usa kebab-case: entry-tickets,
+  # check-in). Decision consciente al enrutarla: mantener el nombre tal cual
+  # en vez de renombrar el endpoint en stay-service (cambio de codigo en otro
+  # repo, fuera de alcance de este PR). La inconsistencia de nomenclatura
+  # queda documentada, no oculta. Ver AUDITORIA-RELEASE.md M-03.
+  - name: stay-service-active-stay
+    url: http://stay-service:8080/v1/activeStay
+    routes:
+      - name: stay-service-active-stay-route
+        paths:
+          - /api/v1/activeStay
         strip_path: true
         plugins:
           - name: jwt
