@@ -22,6 +22,12 @@ import yaml
 # distinto, actualizar este set (y solo este set) en el mismo PR.
 SSE_ROUTES = {"stay-service-events-route"}
 
+# Rutas de contenido estatico (shell, microfrontends): sirven HTML/JS/CSS, no
+# datos de negocio, asi que quedan fuera a proposito de la invariante "toda
+# ruta lleva jwt" (GW-03 protege datos, no estaticos). Si el nombre real de
+# una ruta cambia, actualizar este set (y solo este set) en el mismo PR.
+PUBLIC_STATIC_ROUTES = {"shell-route", "mfe-entryexit-route"}
+
 # GW-06: nombre acordado entre Kong (plugin correlation-id) y los
 # microservicios (CorrelationIdFilter). Cambiarlo en un solo lado corta la
 # traza sin que falle nada.
@@ -43,7 +49,8 @@ def check_all_routes_have_jwt(config):
         route["name"]
         for service in config.get("services", [])
         for route in service.get("routes", [])
-        if "jwt" not in [p["name"] for p in route.get("plugins", [])]
+        if route["name"] not in PUBLIC_STATIC_ROUTES
+        and "jwt" not in [p["name"] for p in route.get("plugins", [])]
     ]
     if missing:
         return "Rutas sin plugin jwt: " + ", ".join(missing)
