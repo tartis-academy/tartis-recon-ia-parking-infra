@@ -348,6 +348,9 @@ services:
         # origen que el shell via Kong (/mfe/entryexit/..., kong/kong.yml), asi
         # que el remoto es una ruta relativa, no un host:puerto.
         VITE_MFE_ENTRYEXIT_URL: "${MFE_ENTRYEXIT_URL:-/mfe/entryexit/assets/remoteEntry.js}"
+        # TODO: mfe-admin todavia no esta contenerizado (fuera de este PR).
+        # Cuando lo este, repetir aqui el mismo cambio que VITE_MFE_ENTRYEXIT_URL
+        # arriba: ruta relativa via Kong (/mfe/admin/...) en vez de host:puerto.
         VITE_MFE_ADMIN_URL: "http://localhost:${MFE_ADMIN_PORT:-5002}/assets/remoteEntry.js"
     container_name: parking-frontend
     restart: unless-stopped

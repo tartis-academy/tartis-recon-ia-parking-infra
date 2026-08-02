@@ -1,27 +1,6 @@
 _format_version: "3.0"
 
 services:
-  # Estaticos del frontend (shell + microfrontends), sin plugin jwt: sirven
-  # HTML/JS/CSS, no datos. La ruta del shell va ultima porque su path "/" es
-  # prefijo de todo lo demas; Kong empareja por el prefijo mas especifico
-  # independientemente del orden, pero se deja asi para que quede explicito
-  # que es el catch-all.
-  - name: mfe-entryexit
-    url: http://mfe-entryexit:80
-    routes:
-      - name: mfe-entryexit-route
-        paths:
-          - /mfe/entryexit
-        strip_path: true
-
-  - name: shell
-    url: http://frontend:80
-    routes:
-      - name: shell-route
-        paths:
-          - /
-        strip_path: false
-
   - name: vehicle-service
     url: http://vehicle-service:8080/v1/vehicles
     routes:
@@ -137,6 +116,31 @@ services:
               claims_to_verify: ["exp"]
               uri_param_names: []
 
+  # Estaticos del frontend (shell + microfrontends), sin plugin jwt: sirven
+  # HTML/JS/CSS, no datos.
+  - name: mfe-entryexit
+    url: http://mfe-entryexit:80
+    routes:
+      - name: mfe-entryexit-route
+        paths:
+          - /mfe/entryexit
+        strip_path: true
+
+  # Catch-all: su path "/" es prefijo de todo lo demas, pero Kong empareja
+  # por el prefijo mas especifico independientemente del orden en el fichero,
+  # asi que las rutas /api/v1/* y /mfe/entryexit de arriba siguen ganando.
+  # Efecto secundario a tener en cuenta al depurar: una URL de API mal escrita
+  # (ej. /api/v1/vehicless, sin ruta que la matchee) no cae en un 404 de Kong,
+  # cae aqui y devuelve el HTML del shell — comportamiento esperado de un SPA
+  # detras de un reverse proxy, pero confunde si no se sabe.
+  - name: shell
+    url: http://frontend:80
+    routes:
+      - name: shell-route
+        paths:
+          - /
+        strip_path: false
+
 consumers:
   - username: keycloak-parking
     jwt_secrets:
@@ -160,10 +164,15 @@ plugins:
         - "http://localhost:8090"
         - "http://localhost:5173"
         - "http://localhost:5000"
-        # mfe-entryexit/mfe-admin llaman a Kong directo desde el navegador (no
-        # tienen su propio reverse proxy como el shell), asi que necesitan
-        # estar en la lista aunque el shell nunca les haga de intermediario.
+        # mfe-entryexit ya no publica puerto de host en el stack de demo (va
+        # detras de Kong en /mfe/entryexit, mismo origen que el shell), pero
+        # `vite dev` local en :5001 (fuera de Docker, sin Kong delante de sus
+        # estaticos) sigue llamando a la API de Kong directo desde ese origen,
+        # asi que se queda.
         - "http://localhost:5001"
+        # mfe-admin todavia no esta contenerizado (fuera de este PR) y llama a
+        # Kong directo desde su puerto de dev; revisar cuando se contenerice
+        # (mismo cambio que mfe-entryexit: pasar a servirse via Kong).
         - "http://localhost:5002"
       methods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
       headers: [Accept, Content-Type, Authorization]
