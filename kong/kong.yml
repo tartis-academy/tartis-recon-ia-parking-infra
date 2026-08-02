@@ -1,6 +1,27 @@
 _format_version: "3.0"
 
 services:
+  # Estaticos del frontend (shell + microfrontends), sin plugin jwt: sirven
+  # HTML/JS/CSS, no datos. La ruta del shell va ultima porque su path "/" es
+  # prefijo de todo lo demas; Kong empareja por el prefijo mas especifico
+  # independientemente del orden, pero se deja asi para que quede explicito
+  # que es el catch-all.
+  - name: mfe-entryexit
+    url: http://mfe-entryexit:80
+    routes:
+      - name: mfe-entryexit-route
+        paths:
+          - /mfe/entryexit
+        strip_path: true
+
+  - name: shell
+    url: http://frontend:80
+    routes:
+      - name: shell-route
+        paths:
+          - /
+        strip_path: false
+
   - name: vehicle-service
     url: http://vehicle-service:8080/v1/vehicles
     routes:

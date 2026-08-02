@@ -344,9 +344,10 @@ services:
     build:
       context: ../tartis-recon-ai-parking-frontend/tartis-recon-ai-frontend
       args:
-        # Puertos públicos (host), no los internos del contenedor — los remotos
-        # se cargan desde el navegador, que solo conoce el host.
-        VITE_MFE_ENTRYEXIT_URL: "http://localhost:${MFE_ENTRYEXIT_PORT:-5001}/assets/remoteEntry.js"
+        # mfe-entryexit ya no publica puerto de host: se sirve bajo el mismo
+        # origen que el shell via Kong (/mfe/entryexit/..., kong/kong.yml), asi
+        # que el remoto es una ruta relativa, no un host:puerto.
+        VITE_MFE_ENTRYEXIT_URL: "${MFE_ENTRYEXIT_URL:-/mfe/entryexit/assets/remoteEntry.js}"
         VITE_MFE_ADMIN_URL: "http://localhost:${MFE_ADMIN_PORT:-5002}/assets/remoteEntry.js"
     container_name: parking-frontend
     restart: unless-stopped
@@ -372,12 +373,15 @@ services:
     build:
       context: ../tartis-recon-ai-parking-mfe-entryexit
       args:
-        # Puerto público (host) del shell — mismo motivo que arriba.
-        VITE_SHELL_URL: "http://localhost:${FRONTEND_PORT:-8090}/assets/remoteEntry.js"
+        # El shell se sirve en la raiz de Kong (mismo origen), asi que su
+        # remoto tambien es relativo — igual que VITE_MFE_ENTRYEXIT_URL arriba.
+        VITE_SHELL_URL: "/assets/remoteEntry.js"
     container_name: parking-mfe-entryexit
     restart: unless-stopped
-    ports:
-      - "${MFE_ENTRYEXIT_PORT:-5001}:80"
+    # Sin puerto de host: solo se accede via Kong (/mfe/entryexit/...,
+    # kong/kong.yml). Para depurar el build en aislado, exponer un puerto
+    # localmente sin commitear.
+    #
     # Sin proxy_pass a Kong (las llamadas de API salen del navegador directo a
     # Kong via VITE_API_URL), así que no depende de kong para arrancar — solo
     # sirve estático (remoteEntry.js + chunks), lo consume el shell en runtime.
