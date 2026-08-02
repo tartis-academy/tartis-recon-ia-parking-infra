@@ -1,0 +1,18 @@
+$kind: collection
+description: |
+  spot-service — verificado contra `origin/release123` el 2026-07-23.
+
+  Todos los endpoints de `SpotRestAdapter` estan implementados. Base path `/v1/spots`.
+
+  Tipos validos de `type`: `CAR`, `CAR_PMR`, `MOTORBIKE`.
+  Estados de `status` en la respuesta: `AVAILABLE`, `OCCUPIED`, `UNAVAILABLE`.
+
+  Avisos sobre el contrato:
+  - `PATCH /{id}/status` **no cambia el estado**: recibe `SpotRequest` (campo
+    `type`) y delega en `UpdateSpotUseCase`, o sea que actualiza el TIPO. El nombre
+    de la ruta engaña. Para liberar una plaza usa `POST /{id}/release`.
+  - `POST /occupy` recibe `SpotRequest` (`{"type": ...}`) y devuelve `SpotResponse`
+    (`id`/`type`/`status`). Las clases `SpotOccupyRequest` (`vehicleType`) y
+    `SpotOccupyResponse` (`spotId`/`numSpot`) existen en el repo pero **no las usa
+    ningun endpoint**: son codigo muerto, no el contrato real.
+  - `GET /v1/spots/availability` del openapi.yml no existe.

@@ -1,0 +1,18 @@
+$kind: collection
+description: |
+  ticket-service — verificado contra `origin/release123` el 2026-07-23.
+
+  > **Ningun endpoint funciona todavia.** Las rutas EXISTEN (`EntryTicketRestAdapter`
+  > y `ReceiptRestAdapter` estan anotados y mapeados), pero **todos los metodos
+  > hacen `return null;`**. La logica esta comentada dentro del propio controlador.
+  >
+  > Consecuencia practica: no dan 404. Spring convierte el `null` en **200 OK con
+  > cuerpo vacio**. Un test que solo mire el codigo de estado dara verde y no
+  > significara nada — por eso las requests de aqui no afirman nada sobre el body.
+
+  Base paths: `/v1/entry-tickets` (HU-01, ticket de entrada) y `/v1/receipts`
+  (HU-02, recibo de salida, IN-22 ticket perdido).
+
+  Impacto en el check-in: `StayTicketClientAdapter.issueEntryTicket` hace
+  `POST /v1/entry-tickets` y espera un `EntryTicketInfo`. Como el controlador
+  devuelve null, el `entryTicket` de la respuesta del check-in llega vacio.

@@ -1,0 +1,22 @@
+name: Parking - Kong (dev)
+values:
+  - key: kongBaseUrl
+    value: 'http://localhost:8000'
+  - key: keycloakTokenUrl
+    value: 'http://localhost:8180/realms/parking/protocol/openid-connect/token'
+  - key: keycloakClientId
+    value: parking-frontend
+  - key: adminUser
+    value: admin.test
+  - key: adminPassword
+    value: Admin.123!
+  - key: operarioUser
+    value: operario.test
+  - key: operarioPassword
+    value: Operario.123!
+  - key: accessToken
+    value: ''
+  - key: plate
+    value: 1234BCD
+  - key: vehicleType
+    value: CAR

@@ -1,0 +1,42 @@
+$kind: http-request
+description: |-
+  **Esto sustituye a los 5 pasos de la carpeta 1.** Una peticion: stay resuelve el vehiculo, aplica RN-11 y CB-05, ocupa plaza (RN-01), crea la estancia y compensa si algo falla (IN-25).
+
+  Requisitos: stay levantado desde `feature/checkin-usecase`, con vehicle y spot arriba y `services.vehicle.url` / `services.spot.url` apuntando a ellos.
+
+  > **Hoy esto falla** por el `.patch()` de `StaySpotClientAdapter` (spot expone POST /occupy -> 405) y porque el auto-alta del vehiculo no manda `active`, que vehicle exige. Ver README.
+url: "{{baseUrlStay}}/v1/stays/check-in"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "plate": "{{plate}}",
+      "vehicleType": "{{vehicleType}}"
+    }
+scripts:
+  - type: beforeRequest
+    code: |-
+      const digits = String(Math.floor(1000 + Math.random() * 9000));
+      const abc = 'BCDFGHJKLMNPRSTVWXYZ';
+      let letters = '';
+      for (let i = 0; i < 3; i++) {
+        letters += abc.charAt(Math.floor(Math.random() * abc.length));
+      }
+      pm.environment.set('plate', digits + letters);
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test('201 Created — barrera abierta', () => pm.response.to.have.status(201));
+      const body = pm.response.json();
+      pm.environment.set('stayId', body.stayId);
+      pm.environment.set('spotId', body.spotId);
+      pm.test('estancia creada', () => {
+        pm.expect(body.stayId).to.be.a('string');
+        pm.expect(body.spotId).to.be.a('string');
+        pm.expect(body.status).to.eql('IN_PROGRESS');
+      });
+    language: text/javascript
+order: 2000

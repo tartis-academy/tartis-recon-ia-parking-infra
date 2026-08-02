@@ -1,0 +1,24 @@
+$kind: http-request
+description: |-
+  El corazon del check-in. Si no hay plaza libre del tipo pedido, aqui salta **RN-01 (parking completo)**.
+
+  Recuerda: el body es `{"type": ...}`, y el verbo es **POST** (el adaptador de stay usa PATCH por error).
+url: "{{baseUrlSpot}}/v1/spots/occupy"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "type": "{{vehicleType}}"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200 OK', () => pm.response.to.have.status(200));
+      const body = pm.response.json();
+      pm.environment.set('spotId', body.id);
+      pm.test('plaza ocupada', () => pm.expect(body.status).to.eql('OCCUPIED'));
+    language: text/javascript
+order: 6000

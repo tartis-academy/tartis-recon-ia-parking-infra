@@ -1,0 +1,24 @@
+$kind: http-request
+name: Check-in de vehiculo de baja -> 422 (RN-11)
+description: |-
+  Espera **422 Unprocessable Entity** (`VehicleDeactivatedException`).
+
+  Preparacion: en la coleccion de vehicle, crea un vehiculo y llama a `PATCH /v1/vehicles/{id}/status` para darlo de baja. Luego intenta entrar con esa matricula.
+url: "{{baseUrlStay}}/v1/stays/check-in"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "plate": "{{plate}}",
+      "vehicleType": "{{vehicleType}}"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('422 Unprocessable Entity', () => pm.response.to.have.status(422));
+      pm.test('status 422 en el cuerpo', () => pm.expect(pm.response.json().status).to.eql(422));
+    language: text/javascript
+order: 4000

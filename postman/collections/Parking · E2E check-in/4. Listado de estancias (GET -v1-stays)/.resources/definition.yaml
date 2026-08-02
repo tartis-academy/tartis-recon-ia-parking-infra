@@ -1,0 +1,4 @@
+$kind: collection
+name: 4. Listado de estancias (GET /v1/stays)
+description: "Endpoint nuevo (HU-08 admin, feature/creacionListaStay -> release): listado paginado de estancias, filtro opcional por status. Util para ensenar en la demo que el checkout de la carpeta 3 aparece como FINISHED en el listado."
+order: 4000

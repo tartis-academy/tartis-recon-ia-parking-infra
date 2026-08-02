@@ -1,0 +1,20 @@
+$kind: http-request
+description: "Sin filtro de status: trae de todo, mezclando IN_PROGRESS y FINISHED."
+url: "{{baseUrlStay}}/v1/stays?page=0&size=5"
+method: GET
+queryParams:
+  page: "0"
+  size: "5"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200 OK', () => pm.response.to.have.status(200));
+      const body = pm.response.json();
+      pm.test('respuesta paginada', () => {
+        pm.expect(body.content).to.be.an('array');
+        pm.expect(body.page).to.eql(0);
+        pm.expect(body.size).to.eql(5);
+        pm.expect(body.totalElements).to.be.a('number');
+      });
+    language: text/javascript
+order: 1000

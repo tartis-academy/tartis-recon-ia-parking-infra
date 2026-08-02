@@ -1,0 +1,24 @@
+$kind: http-request
+name: Check-in sin matricula -> 400
+description: |-
+  `plate` vacia -> **400 Bad Request** por `@NotBlank` (`MethodArgumentNotValidException`).
+
+  El mensaje viene como `campo: motivo`, p. ej. `plate: La matricula es obligatoria`.
+url: "{{baseUrlStay}}/v1/stays/check-in"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "plate": "",
+      "vehicleType": "CAR"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('400 Bad Request', () => pm.response.to.have.status(400));
+      pm.test('menciona el campo plate', () => pm.expect(pm.response.json().message).to.include('plate'));
+    language: text/javascript
+order: 5000

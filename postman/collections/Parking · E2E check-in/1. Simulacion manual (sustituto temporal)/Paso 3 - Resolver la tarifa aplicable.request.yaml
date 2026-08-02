@@ -1,0 +1,17 @@
+$kind: http-request
+description: Lo que hara `StayTariffPort` cuando el adaptador real sustituya al `StubStayTariffAdapter` (que hoy devuelve un id fijo).
+url: "{{baseUrlTariff}}/v1/tariffs/active?type={{vehicleType}}"
+method: GET
+queryParams:
+  - key: type
+    value: "{{vehicleType}}"
+    description: tipo de vehiculo
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200 OK', () => pm.response.to.have.status(200));
+      const body = pm.response.json();
+      pm.test('hay al menos una tarifa activa', () => pm.expect(body.length).to.be.above(0));
+      if (body.length > 0) pm.environment.set('tariffId', body[0].id);
+    language: text/javascript
+order: 5000

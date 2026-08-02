@@ -1,0 +1,35 @@
+$kind: http-request
+description: |-
+  POST al token endpoint de Keycloak con `grant_type=password`. `parking-frontend`
+  es publico con `directAccessGrantsEnabled: true` (`realm-export.dev-only.json`),
+  asi que no hace falta `client_secret` para pedir el token por esta via.
+
+  Guarda `access_token` en la variable de environment `accessToken` — las
+  carpetas "2. Con token" y "3. Token invalido" la consumen. Ejecutar esta
+  request antes que esas dos (o correr toda la coleccion de arriba a abajo).
+url: "{{keycloakTokenUrl}}"
+method: POST
+headers:
+  Content-Type: application/x-www-form-urlencoded
+body:
+  type: urlencoded
+  content:
+    - key: grant_type
+      value: password
+    - key: client_id
+      value: "{{keycloakClientId}}"
+    - key: username
+      value: "{{adminUser}}"
+    - key: password
+      value: "{{adminPassword}}"
+    - key: scope
+      value: openid
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200 OK', () => pm.response.to.have.status(200));
+      const body = pm.response.json();
+      pm.test('devuelve access_token', () => pm.expect(body.access_token).to.be.a('string'));
+      pm.environment.set('accessToken', body.access_token);
+    language: text/javascript
+order: 1000

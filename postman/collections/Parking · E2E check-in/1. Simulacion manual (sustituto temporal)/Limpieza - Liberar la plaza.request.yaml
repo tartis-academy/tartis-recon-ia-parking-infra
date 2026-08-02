@@ -1,0 +1,11 @@
+$kind: http-request
+description: Deja el parking como estaba para poder reejecutar la coleccion. En el flujo real esto es la salida (HU-02) o la compensacion IN-25.
+url: "{{baseUrlSpot}}/v1/spots/{{spotId}}/release"
+method: POST
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200 OK', () => pm.response.to.have.status(200));
+      pm.test('plaza libre otra vez', () => pm.expect(pm.response.json().status).to.eql('AVAILABLE'));
+    language: text/javascript
+order: 8000

@@ -1,0 +1,5 @@
+$kind: http-request
+description: Declarado en el contrato -> 404. Existe `GetStayUseCase`, pero no hay metodo en el controlador.
+url: "{{baseUrlStay}}/v1/stays/{{stayId}}"
+method: GET
+order: 3000

@@ -1,0 +1,34 @@
+$kind: http-request
+name: "Preparar: check-in"
+description: Abre la estancia que vamos a cerrar a continuacion. Matricula nueva en cada corrida (prerequest).
+url: "{{baseUrlStay}}/v1/stays/check-in"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "plate": "{{plate}}",
+      "vehicleType": "{{vehicleType}}"
+    }
+scripts:
+  - type: beforeRequest
+    code: |-
+      const digits = String(Math.floor(1000 + Math.random() * 9000));
+      const abc = 'BCDFGHJKLMNPRSTVWXYZ';
+      let letters = '';
+      for (let i = 0; i < 3; i++) {
+        letters += abc.charAt(Math.floor(Math.random() * abc.length));
+      }
+      pm.environment.set('plate', digits + letters);
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test('201 Created', () => pm.response.to.have.status(201));
+      const body = pm.response.json();
+      pm.environment.set('stayId', body.stayId);
+      pm.environment.set('spotId', body.spotId);
+      pm.test('estancia en curso', () => pm.expect(body.status).to.eql('IN_PROGRESS'));
+    language: text/javascript
+order: 2000

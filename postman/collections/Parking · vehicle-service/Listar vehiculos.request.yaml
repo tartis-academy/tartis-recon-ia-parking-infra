@@ -1,0 +1,14 @@
+$kind: http-request
+description: |-
+  GET /v1/vehicles -> 200 con la lista completa.
+
+  Sin paginacion: los parametros page/size/active/type del openapi.yml todavia no existen en el controlador.
+url: "{{baseUrlVehicle}}/v1/vehicles"
+method: GET
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200 OK', () => pm.response.to.have.status(200));
+      pm.test('devuelve un array', () => pm.expect(pm.response.json()).to.be.an('array'));
+    language: text/javascript
+order: 2000

@@ -1,0 +1,17 @@
+$kind: http-request
+description: |-
+  **Esta ruta no existe en ningun controlador** -> 404.
+
+  Aun asi, `StayTicketClientAdapter.issueExitTicket` la llama. Es un bug conocido del check-OUT (no bloquea el check-in). Lo correcto es alinearla con `/v1/entry-tickets` o crear el recurso de salida.
+url: "{{baseUrlTicket}}/v1/tickets/exit"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "stayId": "{{stayId}}",
+      "entryTicketId": "{{entryTicketId}}"
+    }
+order: 1000

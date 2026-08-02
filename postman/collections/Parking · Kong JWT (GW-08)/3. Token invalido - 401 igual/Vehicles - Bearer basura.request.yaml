@@ -1,0 +1,15 @@
+$kind: http-request
+description: |-
+  Token con formato de JWT pero firma/contenido inventados (no es el caso de
+  "sin token" de la carpeta 1 — aqui la cabecera existe, pero no supera la
+  verificacion). Cualquier ruta sirve para demostrarlo, se usa vehicles.
+url: "{{kongBaseUrl}}/api/v1/vehicles"
+method: GET
+headers:
+  Authorization: Bearer eyJhbGciOiJSUzI1NiJ9.aW52YWxpZG8.ZmlybWFfYmFzdXJh
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('401 Unauthorized (firma invalida, Kong la rechaza)', () => pm.response.to.have.status(401));
+    language: text/javascript
+order: 1000

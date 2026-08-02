@@ -1,0 +1,22 @@
+$kind: http-request
+description: |-
+  GET /v1/tariffs/active?type={vehicleType} -> 200 con la lista de tarifas activas de ese tipo.
+
+  `type` es **obligatorio** (`@RequestParam` sin default): sin el, 400.
+
+  Es el endpoint que stay-service usara para resolver el `tariffId` de la estancia cuando el adaptador real sustituya al `StubStayTariffAdapter`.
+url: "{{baseUrlTariff}}/v1/tariffs/active?type={{vehicleType}}"
+method: GET
+queryParams:
+  - key: type
+    value: "{{vehicleType}}"
+    description: CAR | CAR_PMR | MOTORBIKE (obligatorio)
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200 OK', () => pm.response.to.have.status(200));
+      const body = pm.response.json();
+      pm.test('devuelve un array', () => pm.expect(body).to.be.an('array'));
+      if (body.length > 0) { pm.environment.set('tariffId', body[0].id); }
+    language: text/javascript
+order: 3000

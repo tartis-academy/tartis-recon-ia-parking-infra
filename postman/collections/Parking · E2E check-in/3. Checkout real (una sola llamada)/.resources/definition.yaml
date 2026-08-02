@@ -1,0 +1,3 @@
+$kind: collection
+description: "Cierre de la estancia abierta en la carpeta 2. Requiere el fix de contrato stay<->tariff y stay<->ticket (PRs #35 de stay-service y #40 de ticket-service, ya en release)."
+order: 3000

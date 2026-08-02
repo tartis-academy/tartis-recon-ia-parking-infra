@@ -1,0 +1,5 @@
+$kind: http-request
+description: GET /v1/receipts/{receiptId}. `return null` -> 200 vacio.
+url: "{{baseUrlTicket}}/v1/receipts/{{entryTicketId}}"
+method: GET
+order: 3000

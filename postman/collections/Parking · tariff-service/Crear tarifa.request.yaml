@@ -1,0 +1,30 @@
+$kind: http-request
+description: |-
+  POST /v1/tariffs -> 201 Created.
+
+  Todos los campos son obligatorios. `pricePerMinute` > 0 estricto: un 0 devuelve 400.
+
+  Guarda el id en `tariffId`.
+url: "{{baseUrlTariff}}/v1/tariffs"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "name": "Tarifa estandar coche",
+      "type": "{{vehicleType}}",
+      "pricePerMinute": 0.05,
+      "basePrice": 1.0,
+      "active": true
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('201 Created', () => pm.response.to.have.status(201));
+      const body = pm.response.json();
+      pm.environment.set('tariffId', body.id);
+      pm.test('nace activa', () => pm.expect(body.active).to.be.true);
+    language: text/javascript
+order: 2000

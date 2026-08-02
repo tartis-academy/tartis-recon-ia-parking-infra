@@ -1,0 +1,27 @@
+$kind: http-request
+description: |-
+  Ultimo paso del check-in real. **Hoy no hace nada**: `createEntryTicket` es `return null` -> 200 con cuerpo vacio.
+
+  No cortes el flujo por esto; simplemente el conductor se queda sin ticket impreso.
+url: "{{baseUrlTicket}}/v1/entry-tickets"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "stayId": "{{stayId}}",
+      "plate": "{{plate}}",
+      "issuedAt": "2026-07-23T08:00:00Z"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('el endpoint responde', () =>
+        pm.expect(pm.response.code).to.be.oneOf([200, 201]));
+      if (!pm.response.text()) {
+        console.log('ticket-service sigue sin implementar: cuerpo vacio');
+      }
+    language: text/javascript
+order: 7000

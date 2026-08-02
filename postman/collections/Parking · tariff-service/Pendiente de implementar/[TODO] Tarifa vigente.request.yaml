@@ -1,0 +1,12 @@
+$kind: http-request
+description: |-
+  `GET /v1/tariffs/current` esta en el contrato pero no en el controlador. Spring intentara casar `current` con `/{id}` (UUID) -> 400.
+
+  Mientras tanto, usa `GET /v1/tariffs/active?type=`.
+url: "{{baseUrlTariff}}/v1/tariffs/current?type=CAR"
+method: GET
+queryParams:
+  - key: type
+    value: CAR
+    description: no implementado
+order: 2000

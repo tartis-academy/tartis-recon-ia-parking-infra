@@ -1,0 +1,16 @@
+$kind: collection
+description: |
+  vehicle-service — verificado contra `origin/release123` el 2026-07-23.
+
+  Todos los endpoints de esta coleccion **estan implementados y responden de
+  verdad**. Base path `/v1/vehicles` (`VehicleRestAdapter`).
+
+  Tipos validos de `type`: `CAR`, `CAR_PMR`, `MOTORBIKE` (enum `VehicleType`).
+
+  Avisos sobre el contrato:
+  - `POST` y `PUT` comparten `VehicleRequest`, que exige `type`, `plate` y
+    **`active`** (`@NotNull`). Omitir `active` devuelve 400.
+  - `PATCH /{id}/status` **no lee body**: siempre desactiva y devuelve 204.
+    El `active` del body que promete el openapi.yml todavia no se lee.
+  - El listado **no** admite paginacion (`page`/`size`/`active`/`type`) aunque el
+    contrato la declare.

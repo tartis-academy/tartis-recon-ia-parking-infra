@@ -1,0 +1,19 @@
+$kind: http-request
+description: "Misma ruta con `active: true`. Deja la tarifa lista para el siguiente pase de la coleccion."
+url: "{{baseUrlTariff}}/v1/tariffs/{{tariffId}}/status"
+method: PATCH
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "active": true
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200 OK', () => pm.response.to.have.status(200));
+      pm.test('vuelve a estar activa', () => pm.expect(pm.response.json().active).to.be.true);
+    language: text/javascript
+order: 8000

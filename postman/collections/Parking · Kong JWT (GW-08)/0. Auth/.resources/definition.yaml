@@ -1,0 +1,3 @@
+$kind: collection
+description: Pide un access_token real a Keycloak y lo deja en `accessToken` (environment) para las carpetas "2. Con token" y "3. Token invalido".
+order: 1000

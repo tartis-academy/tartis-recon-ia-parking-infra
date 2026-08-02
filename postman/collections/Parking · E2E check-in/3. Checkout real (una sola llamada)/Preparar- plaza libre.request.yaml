@@ -1,0 +1,20 @@
+$kind: http-request
+name: "Preparar: plaza libre"
+description: Una plaza AVAILABLE para el check-in previo al checkout.
+url: "{{baseUrlSpot}}/v1/spots"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "type": "{{vehicleType}}"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('201 Created', () => pm.response.to.have.status(201));
+      pm.environment.set('spotId', pm.response.json().id);
+    language: text/javascript
+order: 1000

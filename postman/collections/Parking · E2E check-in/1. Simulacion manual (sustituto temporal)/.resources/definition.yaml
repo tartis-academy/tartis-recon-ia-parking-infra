@@ -1,0 +1,3 @@
+$kind: collection
+description: Encadena servicios a mano porque la orquestacion todavia no existe en codigo. Util para probar cada pieza; NO demuestra que el sistema funcione.
+order: 1000

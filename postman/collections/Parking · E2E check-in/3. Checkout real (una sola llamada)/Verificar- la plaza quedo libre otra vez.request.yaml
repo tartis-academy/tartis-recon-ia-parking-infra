@@ -1,0 +1,12 @@
+$kind: http-request
+name: "Verificar: la plaza quedo libre otra vez"
+description: "Prueba de que el checkout libero la plaza de verdad: tiene que volver a AVAILABLE."
+url: "{{baseUrlSpot}}/v1/spots/{{spotId}}"
+method: GET
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200 OK', () => pm.response.to.have.status(200));
+      pm.test('la plaza volvio a AVAILABLE', () => pm.expect(pm.response.json().status).to.eql('AVAILABLE'));
+    language: text/javascript
+order: 4000
