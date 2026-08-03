@@ -27,11 +27,11 @@ NETWORK="parking-shared"
 # antes que los micros (aunque Compose ya resuelve el grafo solo).
 ALL_SERVICES=(keycloak-db keycloak rabbitmq kong
               vehicle-db vehicle-service spot-db spot-service tariff-db tariff-service
-              ticket-db ticket-service stay-db stay-service mfe-entryexit frontend)
+              ticket-db ticket-service stay-db stay-service mfe-entryexit mfe-admin frontend)
 CONTAINERS=(parking-keycloak-db parking-keycloak parking-rabbitmq parking-kong
             parking-vehicle-db parking-vehicle-service parking-spot-db parking-spot-service
             parking-tariff-db parking-tariff-service parking-ticket-db parking-ticket-service
-            parking-stay-db parking-stay-service parking-mfe-entryexit parking-frontend)
+            parking-stay-db parking-stay-service parking-mfe-entryexit parking-mfe-admin parking-frontend)
 
 if [ -t 1 ]; then
   RED=$'\e[31m'; GREEN=$'\e[32m'; YELLOW=$'\e[33m'; BOLD=$'\e[1m'; OFF=$'\e[0m'
@@ -87,8 +87,16 @@ cmd_up() {
   local services=("${ALL_SERVICES[@]}")
   local containers=("${CONTAINERS[@]}")
   if [ "${1:-}" = "--no-frontend" ]; then
-    services=("${services[@]/frontend}")
-    containers=("${containers[@]/parking-frontend}")
+    local filtered=() s
+    for s in "${services[@]}"; do
+      [ "$s" = "frontend" ] || filtered+=("$s")
+    done
+    services=("${filtered[@]}")
+    filtered=()
+    for s in "${containers[@]}"; do
+      [ "$s" = "parking-frontend" ] || filtered+=("$s")
+    done
+    containers=("${filtered[@]}")
     warn "Levantando sin frontend (--no-frontend)."
   fi
 
@@ -130,8 +138,8 @@ cmd_down() {
     warn "Se van a borrar los volumenes de datos de la demo."
   fi
   info "Parando el stack de demo"
-  # shellcheck disable=SC2068,SC2086
-  docker compose "${COMPOSE_FILES[@]}" --env-file "$ENV_FILE" down $flag ${ALL_SERVICES[@]}
+  # shellcheck disable=SC2086
+  docker compose "${COMPOSE_FILES[@]}" --env-file "$ENV_FILE" down $flag
   ok "Hecho."
 }
 

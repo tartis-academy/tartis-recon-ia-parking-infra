@@ -126,6 +126,14 @@ services:
           - /mfe/entryexit
         strip_path: true
 
+  - name: mfe-admin
+    url: http://mfe-admin:80
+    routes:
+      - name: mfe-admin-route
+        paths:
+          - /mfe/admin
+        strip_path: true
+
   # Catch-all: su path "/" es prefijo de todo lo demas, pero Kong empareja
   # por el prefijo mas especifico independientemente del orden en el fichero,
   # asi que las rutas /api/v1/* y /mfe/entryexit de arriba siguen ganando.
@@ -170,9 +178,11 @@ plugins:
         # estaticos) sigue llamando a la API de Kong directo desde ese origen,
         # asi que se queda.
         - "http://localhost:5001"
-        # mfe-admin todavia no esta contenerizado (fuera de este PR) y llama a
-        # Kong directo desde su puerto de dev; revisar cuando se contenerice
-        # (mismo cambio que mfe-entryexit: pasar a servirse via Kong).
+        # mfe-admin ya se sirve via Kong en el stack de demo (/mfe/admin,
+        # mismo origen que el shell), pero `vite dev` local en :5002 (fuera de
+        # Docker, sin Kong delante de sus estaticos) sigue llamando a la API
+        # de Kong directo desde ese origen, asi que se queda — mismo caso que
+        # mfe-entryexit arriba.
         - "http://localhost:5002"
       methods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
       headers: [Accept, Content-Type, Authorization]
