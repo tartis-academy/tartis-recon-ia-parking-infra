@@ -11,7 +11,7 @@ description: |-
   > `entryTicket` llega **siempre a null**: `StayRestMapper.toCheckInResponse` lo fija a null a proposito, la emision del ticket queda fuera del alcance de HU-01.
   > `status` sera `IN_PROGRESS`.
 
-  **Requiere vehicle-service y spot-service levantados**, con las URLs de `services.*.url` apuntando a ellos (ver README).
+  **Requiere vehicle-service, spot-service y tariff-service levantados**, con las URLs de `services.*.url` apuntando a ellos (ver README).
 url: "{{baseUrlStay}}/v1/stays/check-in"
 method: POST
 headers:
