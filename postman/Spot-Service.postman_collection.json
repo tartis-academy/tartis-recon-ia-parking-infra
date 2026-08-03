@@ -2,10 +2,77 @@
   "info": {
     "_postman_id": "3ff22083-135a-4fb7-9eec-50e343d55c86",
     "name": "Parking · spot-service",
-    "description": "spot-service — verificado contra `origin/release123` el 2026-07-23.\n\nTodos los endpoints de `SpotRestAdapter` estan implementados. Base path `/v1/spots`.\n\nTipos validos de `type`: `CAR`, `CAR_PMR`, `MOTORBIKE`.\nEstados de `status` en la respuesta: `AVAILABLE`, `OCCUPIED`, `UNAVAILABLE`.\n\nAvisos sobre el contrato:\n- `PATCH /{id}/status` **no cambia el estado**: recibe `SpotRequest` (campo\n  `type`) y delega en `UpdateSpotUseCase`, o sea que actualiza el TIPO. El nombre\n  de la ruta engaña. Para liberar una plaza usa `POST /{id}/release`.\n- `POST /occupy` recibe `SpotRequest` (`{\"type\": ...}`) y devuelve `SpotResponse`\n  (`id`/`type`/`status`). Las clases `SpotOccupyRequest` (`vehicleType`) y\n  `SpotOccupyResponse` (`spotId`/`numSpot`) existen en el repo pero **no las usa\n  ningun endpoint**: son codigo muerto, no el contrato real.\n- `GET /v1/spots/availability` del openapi.yml no existe.\n",
+    "description": "spot-service — verificado contra `release` el 2026-07-27.\n\nTodos los endpoints de `SpotRestAdapter` estan implementados. Base path `/v1/spots`.\n\nTipos validos de `type`: `CAR`, `CAR_PMR`, `MOTORBIKE`.\nEstados de `status` en la respuesta: `AVAILABLE`, `OCCUPIED`, `UNAVAILABLE`.\n\nRequiere JWT: todos los endpoints estan protegidos con `@PreAuthorize` (`SecurityConfig` sin `@Profile`, aplica siempre). Corre \"0. Auth\" antes que el resto para rellenar `accessToken` (colección con auth Bearer a nivel de colección).\n\nAvisos sobre el contrato:\n- `PATCH /{id}/status` **sí cambia el estado**: recibe `SpotStatusRequest` (campo\n  `status`) y delega en `UpdateSpotStatusUseCase` (RN-10). Solo admite\n  AVAILABLE <-> UNAVAILABLE; pedir OCCUPIED por aqui da 409.\n- `POST /occupy` recibe `SpotOccupyRequest` (`{\"vehicleType\": ...}`) y devuelve\n  `SpotResponse`. `vehicleType` es el campo canonico; `type` se acepta solo como\n  alias temporal para no acoplar el orden de despliegue con stay-service.\n- `GET /v1/spots/availability` existe y devuelve `AvailabilityResponse`\n  (`type`/`available`/`availableCount`/`totalCount`). Sin el parametro `type` da 400.\n",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
+    {
+      "name": "0. Auth",
+      "item": [
+        {
+          "name": "Obtener token (admin.test)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "url": {
+              "raw": "{{keycloakTokenUrl}}",
+              "host": [
+                "{{keycloakTokenUrl}}"
+              ]
+            },
+            "description": "POST al token endpoint de Keycloak con `grant_type=password`. `parking-frontend` es publico con `directAccessGrantsEnabled: true`, asi que no hace falta `client_secret`.\n\nGuarda `access_token` en la variable de environment `accessToken`, que consume el resto de la coleccion via el auth Bearer de nivel de coleccion. Ejecutar esta request antes que las demas (o correr toda la coleccion de arriba a abajo).",
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "password"
+                },
+                {
+                  "key": "client_id",
+                  "value": "{{keycloakClientId}}"
+                },
+                {
+                  "key": "username",
+                  "value": "{{adminUser}}"
+                },
+                {
+                  "key": "password",
+                  "value": "{{adminPassword}}"
+                },
+                {
+                  "key": "scope",
+                  "value": "openid"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('devuelve access_token', () => pm.expect(body.access_token).to.be.a('string'));",
+                  "pm.environment.set('accessToken', body.access_token);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
     {
       "name": "Crear plaza",
       "request": {
@@ -136,10 +203,10 @@
             "occupy"
           ]
         },
-        "description": "POST /v1/spots/occupy -> 200 con la plaza asignada.\n\nBody: `{\"type\": \"CAR\"}` (campo `type`, NO `vehicleType`).\n\nEs el endpoint que stay-service necesita en el check-in. Si no queda ninguna plaza libre de ese tipo, aqui se materializa **RN-01 (parking completo)**.\n\n> Ojo: `StaySpotClientAdapter.occupySpot` llama a esta ruta con **PATCH**, no con POST -> hoy recibe 405 y el check-in nunca ocupa plaza. Ver README, seccion 'Bugs conocidos'.",
+        "description": "POST /v1/spots/occupy -> 200 con la plaza asignada.\n\nBody: `{\"vehicleType\": \"CAR\"}` — `vehicleType` es el campo canonico de `SpotOccupyRequest`. `type` se acepta como alias temporal (`@JsonAlias(\"type\")`) solo para no acoplar el orden de despliegue con stay-service; se retira cuando stay-service migre.\n\nEs el endpoint que stay-service necesita en el check-in. Si no queda ninguna plaza libre de ese tipo, aqui se materializa **RN-01 (parking completo)**.\n\n> Ojo: `StaySpotClientAdapter.occupySpot` llama a esta ruta con **PATCH**, no con POST -> hoy recibe 405 y el check-in nunca ocupa plaza. Ver README, seccion 'Bugs conocidos'.",
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"type\": \"{{vehicleType}}\"\n}",
+          "raw": "{\n  \"vehicleType\": \"{{vehicleType}}\"\n}",
           "options": {
             "raw": {
               "language": "json"
@@ -243,7 +310,7 @@
       ]
     },
     {
-      "name": "PATCH /status (OJO: cambia el TIPO, no el estado)",
+      "name": "Marcar plaza como UNAVAILABLE (HU-05 CA5)",
       "request": {
         "method": "PATCH",
         "header": [
@@ -264,10 +331,10 @@
             "status"
           ]
         },
-        "description": "PATCH /v1/spots/{id}/status -> 200.\n\n**El nombre miente.** Recibe `SpotRequest` (`{\"type\": ...}`) y llama a `UpdateSpotUseCase`, exactamente igual que el PUT: cambia el TIPO de la plaza, no su `status`. No hay forma por REST de poner una plaza en `UNAVAILABLE`.\n\nSe deja en la coleccion porque `StaySpotClientAdapter.updateSpotStatus` la llama tal cual.",
+        "description": "`PATCH /v1/spots/{id}/status` -> 200. Recibe `SpotStatusRequest` (`{\"status\": ...}`) y cambia el estado de verdad (RN-10).\n\nSolo admite AVAILABLE <-> UNAVAILABLE. Pedir OCCUPIED por aqui devuelve 409: para ocupar esta `POST /v1/spots/occupy`.\n\nOJO cross-repo: `StaySpotClientAdapter.updateSpotStatus` sigue mandando `{\"type\": ...}` y por tanto recibe un 400. Hoy no lo llama ningun caso de uso de stay-service.",
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"type\": \"{{vehicleType}}\"\n}",
+          "raw": "{\n  \"status\": \"UNAVAILABLE\"\n}",
           "options": {
             "raw": {
               "language": "json"
@@ -282,79 +349,67 @@
           "script": {
             "type": "text/javascript",
             "exec": [
-              "pm.test('200 OK', () => pm.response.to.have.status(200));"
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('la plaza queda UNAVAILABLE', () => pm.expect(body.status).to.eql('UNAVAILABLE'));"
             ]
           }
         }
       ]
     },
     {
-      "name": "Pendiente de implementar",
-      "description": "Rutas o comportamientos del openapi.yml que el controlador no cubre.",
-      "item": [
-        {
-          "name": "[TODO] Consultar disponibilidad",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrlSpot}}/v1/spots/availability?type=CAR",
-              "host": [
-                "{{baseUrlSpot}}"
-              ],
-              "path": [
-                "v1",
-                "spots",
-                "availability"
-              ],
-              "query": [
-                {
-                  "key": "type",
-                  "value": "CAR",
-                  "description": "no implementado"
-                }
-              ]
-            },
-            "description": "`GET /v1/spots/availability` esta en el openapi.yml pero no en `SpotRestAdapter`.\n\nDevuelve **404**... o peor: Spring puede intentar resolver `availability` como el `{id}` UUID del GET por id y responder 400. En ninguno de los dos casos es un resultado de negocio."
-          },
-          "response": []
-        },
-        {
-          "name": "[TODO] Marcar plaza como UNAVAILABLE",
-          "request": {
-            "method": "PATCH",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrlSpot}}/v1/spots/{{spotId}}/status",
-              "host": [
-                "{{baseUrlSpot}}"
-              ],
-              "path": [
-                "v1",
-                "spots",
-                "{{spotId}}",
-                "status"
-              ]
-            },
-            "description": "Lo que el contrato espera de `PATCH /{id}/status`: cambiar el estado. Hoy este body **se ignora** (el controlador solo lee `type`) y la respuesta sera un 200 engañoso con el estado sin tocar.",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"status\": \"UNAVAILABLE\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
+      "name": "Consultar disponibilidad (HU-03)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrlSpot}}/v1/spots/availability?type=CAR",
+          "host": [
+            "{{baseUrlSpot}}"
+          ],
+          "path": [
+            "v1",
+            "spots",
+            "availability"
+          ],
+          "query": [
+            {
+              "key": "type",
+              "value": "CAR"
             }
-          },
-          "response": []
+          ]
+        },
+        "description": "`GET /v1/spots/availability?type=` -> 200 con `AvailabilityResponse`.\n\nSolo lee, no reserva nada: para ocupar esta `POST /v1/spots/occupy`.\nRN-10: las plazas UNAVAILABLE no cuentan como disponibles, asi que `availableCount` puede ser 0 con `totalCount` > 0.\n\nSin el parametro `type` responde 400."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('responde el tipo consultado', () => pm.expect(body.type).to.eql('CAR'));",
+              "pm.test('trae los contadores', () => {",
+              "    pm.expect(body.availableCount).to.be.a('number');",
+              "    pm.expect(body.totalCount).to.be.a('number');",
+              "});",
+              "pm.test('available es coherente con availableCount', () => pm.expect(body.available).to.eql(body.availableCount > 0));"
+            ]
+          }
         }
       ]
     }
-  ]
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  }
 }

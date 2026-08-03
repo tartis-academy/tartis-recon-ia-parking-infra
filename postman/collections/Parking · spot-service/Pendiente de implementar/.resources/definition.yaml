@@ -1,3 +1,0 @@
-$kind: collection
-description: Rutas o comportamientos del openapi.yml que el controlador no cubre.
-order: 1000

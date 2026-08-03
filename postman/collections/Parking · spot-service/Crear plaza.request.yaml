@@ -7,6 +7,7 @@ url: "{{baseUrlSpot}}/v1/spots"
 method: POST
 headers:
   Content-Type: application/json
+  Authorization: "Bearer {{accessToken}}"
 body:
   type: json
   content: |-

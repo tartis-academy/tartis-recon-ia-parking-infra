@@ -4,6 +4,7 @@ url: "{{baseUrlSpot}}/v1/spots/{{spotId}}"
 method: PUT
 headers:
   Content-Type: application/json
+  Authorization: "Bearer {{accessToken}}"
 body:
   type: json
   content: |-

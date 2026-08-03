@@ -2,7 +2,10 @@ $kind: http-request
 description: |-
   POST /v1/spots/occupy -> 200 con la plaza asignada.
 
-  Body: `{"type": "CAR"}` (campo `type`, NO `vehicleType`).
+  Body: `{"vehicleType": "CAR"}` — `vehicleType` es el campo canonico de
+  `SpotOccupyRequest`. `type` se acepta como alias temporal
+  (`@JsonAlias("type")`) solo para no acoplar el orden de despliegue con
+  stay-service; se retira cuando stay-service migre.
 
   Es el endpoint que stay-service necesita en el check-in. Si no queda ninguna plaza libre de ese tipo, aqui se materializa **RN-01 (parking completo)**.
 
@@ -11,11 +14,12 @@ url: "{{baseUrlSpot}}/v1/spots/occupy"
 method: POST
 headers:
   Content-Type: application/json
+  Authorization: "Bearer {{accessToken}}"
 body:
   type: json
   content: |-
     {
-      "type": "{{vehicleType}}"
+      "vehicleType": "{{vehicleType}}"
     }
 scripts:
   - type: afterResponse

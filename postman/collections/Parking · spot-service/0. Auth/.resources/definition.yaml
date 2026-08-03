@@ -1,0 +1,3 @@
+$kind: collection
+description: Pide un access_token real a Keycloak y lo deja en `accessToken` (environment) para el resto de la coleccion.
+order: 1000

@@ -5,6 +5,8 @@ Colecciones para probar los cinco microservicios del parking en local.
 **Verificado contra el código de `origin/release123` de cada repo el 2026-07-23**,
 no contra el `openapi.yml`. Donde el contrato y la implementación divergen manda
 el código, y la divergencia queda anotada en la descripción de cada request.
+`Spot-Service` se reverificó contra `release` el 2026-07-27 (ver su propia
+cabecera) — el resto sigue en el snapshot del 23.
 
 ---
 
@@ -42,7 +44,7 @@ el código, y la divergencia queda anotada en la descripción de cada request.
    | Orden | Colección | Qué esperar |
    |---|---|---|
    | 1 | Vehicle | Todo verde |
-   | 2 | Spot | Todo verde |
+   | 2 | Spot | Todo verde — corre primero su carpeta "0. Auth" o dará 401 en todo |
    | 3 | Tariff | Todo verde |
    | 4 | Ticket | 200 con **cuerpo vacío** — es un esqueleto, ver `[STUB]` |
    | 5 | Stay | Solo el check-in — ya mergeado en `release` / `release123` |
@@ -51,11 +53,13 @@ el código, y la divergencia queda anotada en la descripción de cada request.
    Dentro de cada colección, ejecuta de arriba abajo (o con el **Collection
    Runner**, botón *Run*). La carpeta *Pendiente de implementar* del final falla
    a propósito: son endpoints que están en el contrato pero no en el código.
+   `Spot` ya no tiene esa carpeta — sus dos pendientes se implementaron y ahora
+   son requests normales.
 
 5. **Empieza por la E2E si solo quieres ver el flujo de entrada.** Tiene dos
    carpetas: *"1. Simulación manual"* reproduce el check-in llamando a los cinco
    servicios a mano y **funciona hoy**; *"2. Check-in real"* hace la única
-   llamada a `/v1/stays/check-in` y **falla** por los bugs 1 y 2 de
+   llamada a `/v1/stays/check-in` y **falla** por el bug 1 de
    [Bugs conocidos](#bugs-conocidos-que-verás-al-probar). La primera es el
    sustituto temporal de la segunda.
 
@@ -188,30 +192,22 @@ request correspondiente.
    `active` (`@NotNull`) → 400. El check-in de una matrícula nueva no puede
    funcionar hasta que se mande `active: true` o se relaje la validación.
 
-2. **`PATCH /v1/spots/{id}/status` no cambia el estado.**
-   Recibe `SpotRequest` (campo `type`) y delega en `UpdateSpotUseCase`: cambia el
-   *tipo* de la plaza. No hay forma por REST de poner una plaza en `UNAVAILABLE`.
-
-3. **`PATCH /v1/vehicles/{id}/status` ignora el body.**
+2. **`PATCH /v1/vehicles/{id}/status` ignora el body.**
    Siempre desactiva y devuelve 204. No se puede reactivar un vehículo por REST.
 
-4. **RN-01 no se puede mapear a 409 todavía.**
+3. **RN-01 no se puede mapear a 409 todavía.**
    Cuando spot responde 409 (parking completo), `occupySpot` deja escapar un
    `HttpClientErrorException` / `IllegalStateException` en vez de lanzar
    `NoAvailableSpotException`. Hasta que lo lance, el `CheckInUseCase` no puede
    traducirlo al 409 del contrato.
 
-5. **`POST /v1/tickets/exit` no existe.**
+4. **`POST /v1/tickets/exit` no existe.**
    `StayTicketClientAdapter.issueExitTicket` la llama; ticket-service usa
    `/v1/entry-tickets`. Es del check-out, no bloquea el check-in.
 
-6. **Sin timeouts en las llamadas salientes de stay.**
+5. **Sin timeouts en las llamadas salientes de stay.**
    El `RestClient.Builder` compartido no fija connect/read timeout. Si spot se
    cuelga, el tótem agota hilos en vez de denegar el acceso.
-
-7. **`SpotOccupyRequest` / `SpotOccupyResponse` son código muerto.**
-   Ningún endpoint los usa. El contrato real de `/occupy` es `SpotRequest` in,
-   `SpotResponse` out. No te guíes por esas clases.
 
 ---
 

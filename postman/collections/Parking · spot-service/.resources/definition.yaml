@@ -1,18 +1,25 @@
 $kind: collection
 description: |
-  spot-service — verificado contra `origin/release123` el 2026-07-23.
+  spot-service — verificado contra `release` el 2026-07-27.
 
   Todos los endpoints de `SpotRestAdapter` estan implementados. Base path `/v1/spots`.
 
   Tipos validos de `type`: `CAR`, `CAR_PMR`, `MOTORBIKE`.
   Estados de `status` en la respuesta: `AVAILABLE`, `OCCUPIED`, `UNAVAILABLE`.
 
+  Requiere JWT: todos los endpoints estan protegidos con `@PreAuthorize`
+  (`SecurityConfig` sin `@Profile`, aplica siempre). Corre "0. Auth" antes que
+  el resto para rellenar `accessToken`; el resto de requests mandan
+  `Authorization: Bearer {{accessToken}}`.
+
   Avisos sobre el contrato:
-  - `PATCH /{id}/status` **no cambia el estado**: recibe `SpotRequest` (campo
-    `type`) y delega en `UpdateSpotUseCase`, o sea que actualiza el TIPO. El nombre
-    de la ruta engaña. Para liberar una plaza usa `POST /{id}/release`.
-  - `POST /occupy` recibe `SpotRequest` (`{"type": ...}`) y devuelve `SpotResponse`
-    (`id`/`type`/`status`). Las clases `SpotOccupyRequest` (`vehicleType`) y
-    `SpotOccupyResponse` (`spotId`/`numSpot`) existen en el repo pero **no las usa
-    ningun endpoint**: son codigo muerto, no el contrato real.
-  - `GET /v1/spots/availability` del openapi.yml no existe.
+  - `PATCH /{id}/status` **sí cambia el estado**: recibe `SpotStatusRequest`
+    (campo `status`) y delega en `UpdateSpotStatusUseCase` (RN-10). Solo admite
+    AVAILABLE <-> UNAVAILABLE; pedir OCCUPIED por aqui da 409.
+  - `POST /occupy` recibe `SpotOccupyRequest` (`{"vehicleType": ...}`) y
+    devuelve `SpotResponse`. `vehicleType` es el campo canonico; `type` se
+    acepta solo como alias temporal para no acoplar el orden de despliegue con
+    stay-service.
+  - `GET /v1/spots/availability` existe y devuelve `AvailabilityResponse`
+    (`type`/`available`/`availableCount`/`totalCount`). Sin el parametro
+    `type` da 400.
