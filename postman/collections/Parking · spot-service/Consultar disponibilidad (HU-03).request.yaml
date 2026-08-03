@@ -1,0 +1,29 @@
+$kind: http-request
+description: |-
+  `GET /v1/spots/availability?type=` -> 200 con `AvailabilityResponse`.
+
+  Solo lee, no reserva nada: para ocupar esta `POST /v1/spots/occupy`.
+  RN-10: las plazas UNAVAILABLE no cuentan como disponibles, asi que
+  `availableCount` puede ser 0 con `totalCount` > 0.
+
+  Sin el parametro `type` responde 400.
+url: "{{baseUrlSpot}}/v1/spots/availability?type=CAR"
+method: GET
+headers:
+  Authorization: "Bearer {{accessToken}}"
+queryParams:
+  - key: type
+    value: CAR
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200 OK', () => pm.response.to.have.status(200));
+      const body = pm.response.json();
+      pm.test('responde el tipo consultado', () => pm.expect(body.type).to.eql('CAR'));
+      pm.test('trae los contadores', () => {
+          pm.expect(body.availableCount).to.be.a('number');
+          pm.expect(body.totalCount).to.be.a('number');
+      });
+      pm.test('available es coherente con availableCount', () => pm.expect(body.available).to.eql(body.availableCount > 0));
+    language: text/javascript
+order: 9000

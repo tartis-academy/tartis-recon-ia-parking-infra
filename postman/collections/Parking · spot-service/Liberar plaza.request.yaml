@@ -5,6 +5,8 @@ description: |-
   Es la compensacion que ejecuta el check-in (IN-25) si falla al guardar la estancia despues de haber ocupado la plaza.
 url: "{{baseUrlSpot}}/v1/spots/{{spotId}}/release"
 method: POST
+headers:
+  Authorization: "Bearer {{accessToken}}"
 scripts:
   - type: afterResponse
     code: |-

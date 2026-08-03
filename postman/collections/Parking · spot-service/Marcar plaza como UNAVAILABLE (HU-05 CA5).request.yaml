@@ -1,0 +1,30 @@
+$kind: http-request
+description: |-
+  `PATCH /v1/spots/{id}/status` -> 200. Recibe `SpotStatusRequest`
+  (`{"status": ...}`) y cambia el estado de verdad (RN-10).
+
+  Solo admite AVAILABLE <-> UNAVAILABLE. Pedir OCCUPIED por aqui devuelve 409:
+  para ocupar esta `POST /v1/spots/occupy`.
+
+  OJO cross-repo: `StaySpotClientAdapter.updateSpotStatus` sigue mandando
+  `{"type": ...}` y por tanto recibe un 400. Hoy no lo llama ningun caso de
+  uso de stay-service.
+url: "{{baseUrlSpot}}/v1/spots/{{spotId}}/status"
+method: PATCH
+headers:
+  Content-Type: application/json
+  Authorization: "Bearer {{accessToken}}"
+body:
+  type: json
+  content: |-
+    {
+      "status": "UNAVAILABLE"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200 OK', () => pm.response.to.have.status(200));
+      const body = pm.response.json();
+      pm.test('la plaza queda UNAVAILABLE', () => pm.expect(body.status).to.eql('UNAVAILABLE'));
+    language: text/javascript
+order: 8000

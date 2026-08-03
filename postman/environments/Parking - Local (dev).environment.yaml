@@ -14,6 +14,16 @@ values:
     value: 1234BCD
   - key: vehicleType
     value: CAR
+  - key: keycloakTokenUrl
+    value: 'http://localhost:8180/realms/parking/protocol/openid-connect/token'
+  - key: keycloakClientId
+    value: parking-frontend
+  - key: adminUser
+    value: admin.test
+  - key: adminPassword
+    value: Admin.123!
+  - key: accessToken
+    value: ''
   - key: vehicleId
     value: ''
   - key: spotId
