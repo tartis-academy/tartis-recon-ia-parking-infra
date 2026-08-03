@@ -2,14 +2,15 @@ $kind: collection
 description: |
   stay-service — verificado el 2026-07-23.
 
-  > **Que rama necesitas:** en `origin/release123` `StayRestAdapter` esta VACIO: no
-  > hay ningun endpoint y todas estas requests dan 404. El `POST /v1/stays/check-in`
-  > solo existe en la rama **`feature/checkin-usecase`** (HU-01, 54/54 tests).
-  > Levanta stay desde esa rama o esta coleccion no sirve de nada.
+  > **Que rama necesitas:** `POST /v1/stays/check-in` ya esta mergeado en **`release`**
+  > y **`release123`** (PR #27, HU-01). En `main` `StayRestAdapter` sigue vacio, asi que
+  > ahi todas estas requests dan 404. Levanta stay desde `release` o `release123`.
 
-  El check-in es sincrono y orquesta tres servicios:
-  `vehicle` (resolver o dar de alta la matricula, RN-11) -> `spot` (ocupar plaza,
-  RN-01) -> persistencia de la estancia. Con `ticket` pendiente.
+  El check-in es sincrono y orquesta, en orden: `vehicle` (resolver o dar de alta la
+  matricula, `GET /v1/vehicles/plate/{plate}` + `POST /v1/vehicles`, RN-11) -> `spot`
+  (ocupar plaza, RN-01) -> `tariff` (tarifa activa del tipo de vehiculo) -> persistencia
+  de la estancia. Si algo falla tras ocupar la plaza, se libera (compensacion). La
+  emision del `ticket` de entrada sigue pendiente, por eso `entryTicket` llega a null.
 
   Codigos de la respuesta (`CustomizedExceptionAdapter`, IN-36):
 
