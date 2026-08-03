@@ -10,7 +10,7 @@
 # Uso:
 #   ./scripts/checkin-traffic.sh                    # 20 check-ins, matriculas aleatorias
 #   COUNT=50 MIN_DELAY=1 MAX_DELAY=3 ./scripts/checkin-traffic.sh
-#   PLATES="1234ABC 5678XYZ 9012DEF" ./scripts/checkin-traffic.sh
+#   PLATES="1234BCD 5678XYZ 9012DFG" ./scripts/checkin-traffic.sh
 #
 set -euo pipefail
 
@@ -23,8 +23,9 @@ MAX_DELAY="${MAX_DELAY:-5}"
 TYPES=(CAR CAR MOTORBIKE CAR_PMR)  # CAR con mas peso: es lo que mas se siembra
 
 random_plate() {
+  # Solo consonantes (sin vocales/Ñ/Q): vehicle-service valida contra ese formato.
   printf "%04d%s\n" "$((RANDOM % 10000))" \
-    "$(tr -dc 'A-Z' </dev/urandom | head -c3)"
+    "$(tr -dc 'BCDFGHJKLMNPRSTVWXYZ' </dev/urandom | head -c3)"
 }
 
 ok=0
