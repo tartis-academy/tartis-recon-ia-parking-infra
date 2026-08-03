@@ -1,0 +1,5 @@
+$kind: http-request
+description: "PATCH /v1/receipts/{receiptId}/lost. IN-22: aplica tarifa de penalizacion. `return null` -> 200 vacio."
+url: "{{baseUrlTicket}}/v1/receipts/{{entryTicketId}}/lost"
+method: PATCH
+order: 4000

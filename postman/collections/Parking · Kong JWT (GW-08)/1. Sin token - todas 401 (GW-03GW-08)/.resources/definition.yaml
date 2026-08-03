@@ -1,0 +1,8 @@
+$kind: collection
+description: |-
+  Las 7 rutas declaradas en `kong.yml`, sin cabecera `Authorization`. Todas
+  deben dar 401 — es la comprobacion en caliente de `check_all_routes_have_jwt`
+  de `scripts/ci/validate_kong.py` (GW-08). El metodo (GET) es indiferente: el
+  plugin `jwt` corre a nivel de route, antes de que Kong mire el metodo o
+  reenvie nada al microservicio.
+order: 2000

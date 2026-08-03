@@ -1,0 +1,30 @@
+$kind: http-request
+description: |-
+  POST /v1/entry-tickets. **Devuelve 200 con cuerpo vacio** (`return null` en `createEntryTicket`).
+
+  El DTO declarado es `EntryTicketRequest(UUID stayId)` — solo `stayId`. Pero `StayTicketClientAdapter` manda ademas `plate` e `issuedAt`; hay que decidir cual es el contrato bueno antes de implementarlo.
+
+  Respuesta esperada cuando exista: `EntryTicketResponse(id, stayId, code, issuedAt, status)` -> 201.
+url: "{{baseUrlTicket}}/v1/entry-tickets"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "stayId": "{{stayId}}",
+      "plate": "{{plate}}",
+      "issuedAt": "2026-07-23T08:00:00Z"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('el endpoint responde (aun sin implementar)', () =>
+        pm.expect(pm.response.code).to.be.oneOf([200, 201]));
+      pm.test('SIGUE SIN IMPLEMENTAR: cuerpo vacio', () =>
+        pm.expect(pm.response.text()).to.be.empty);
+      // Cuando este implementado, este ultimo test fallara.
+      // Eso es la señal de que toca actualizar la coleccion.
+    language: text/javascript
+order: 1000

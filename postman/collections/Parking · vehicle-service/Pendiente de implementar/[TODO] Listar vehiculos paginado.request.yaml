@@ -1,0 +1,18 @@
+$kind: http-request
+description: "El openapi.yml declara paginacion y filtros en el listado; el controlador los ignora. Esta request **devuelve 200 con la lista completa**, no una pagina: los query params se descartan en silencio."
+url: "{{baseUrlVehicle}}/v1/vehicles?page=0&size=20&active=true&type=CAR"
+method: GET
+queryParams:
+  - key: page
+    value: "0"
+    description: ignorado hoy
+  - key: size
+    value: "20"
+    description: ignorado hoy
+  - key: active
+    value: "true"
+    description: ignorado hoy
+  - key: type
+    value: CAR
+    description: ignorado hoy
+order: 1000

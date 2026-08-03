@@ -1,0 +1,12 @@
+$kind: http-request
+description: Con Bearer valido -> Kong debe dejarla pasar (correr "0. Auth" antes).
+url: "{{kongBaseUrl}}/api/v1/activeStay"
+method: GET
+headers:
+  Authorization: "Bearer {{accessToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('no es 401 (Kong dejo pasar el JWT)', () => pm.expect(pm.response.code).to.not.eql(401));
+    language: text/javascript
+order: 7000

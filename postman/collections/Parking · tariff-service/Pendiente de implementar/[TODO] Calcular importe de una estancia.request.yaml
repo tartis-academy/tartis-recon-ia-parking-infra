@@ -1,0 +1,18 @@
+$kind: http-request
+description: |-
+  **El endpoint que bloquea el check-out.** El openapi.yml lo declara, `TariffRestAdapter` no lo tiene -> 404/405.
+
+  Hasta que exista, stay-service no puede calcular el importe al salir y `StayTariffPort` se queda con el `StubStayTariffAdapter` (devuelve un tariffId fijo).
+url: "{{baseUrlTariff}}/v1/tariffs/calculate"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "type": "CAR",
+      "checkIn": "2026-07-23T08:00:00Z",
+      "checkOut": "2026-07-23T10:30:00Z"
+    }
+order: 1000

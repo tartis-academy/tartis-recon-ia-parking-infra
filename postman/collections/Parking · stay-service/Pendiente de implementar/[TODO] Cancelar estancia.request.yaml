@@ -1,0 +1,5 @@
+$kind: http-request
+description: Declarado en el contrato -> 404. El dominio ya tiene `Stay.cancel()`; falta el caso de uso y el endpoint.
+url: "{{baseUrlStay}}/v1/stays/{{stayId}}/cancel"
+method: POST
+order: 2000

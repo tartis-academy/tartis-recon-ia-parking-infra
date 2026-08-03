@@ -1,0 +1,14 @@
+$kind: http-request
+description: |-
+  GET /v1/vehicles/plate/{plate} -> 200, o 404 si no existe.
+
+  **Este es el endpoint que consume stay-service en el check-in** (`StayVehicleClientAdapter.getOrCreateVehicle`): si da 404, stay crea el vehiculo con un POST.
+url: "{{baseUrlVehicle}}/v1/vehicles/plate/{{plate}}"
+method: GET
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200 OK', () => pm.response.to.have.status(200));
+      pm.test('la matricula coincide', () => pm.expect(pm.response.json().plate).to.eql(pm.environment.get('plate')));
+    language: text/javascript
+order: 5000

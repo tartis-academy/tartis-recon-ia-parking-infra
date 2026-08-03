@@ -1,0 +1,26 @@
+$kind: http-request
+description: |-
+  Cierra la estancia: calcula el importe contra tariff-service (POST /v1/tariffs/calculate), emite el ticket de salida contra ticket-service (POST /v1/tickets) y libera la plaza.
+
+  Sin las PRs #35/#40 mergeadas esto da 500 (contrato roto stay<->tariff y stay<->ticket, y un bean fantasma en ticket-service).
+url: "{{baseUrlStay}}/v1/stays/check-out"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "plate": "{{plate}}"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200 OK', () => pm.response.to.have.status(200));
+      const body = pm.response.json();
+      pm.environment.set('ticketId', body.ticketId);
+      pm.test('estancia FINISHED', () => pm.expect(body.status).to.eql('FINISHED'));
+      pm.test('importe calculado (> 0)', () => pm.expect(body.amount).to.be.above(0));
+      pm.test('ticket de salida emitido', () => pm.expect(body.ticketId).to.be.a('string'));
+    language: text/javascript
+order: 3000

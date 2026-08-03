@@ -1,0 +1,9 @@
+$kind: http-request
+description: GET /v1/receipts. Acepta `stayId` opcional. `return null` -> 200 vacio.
+url: "{{baseUrlTicket}}/v1/receipts?stayId={{stayId}}"
+method: GET
+queryParams:
+  - key: stayId
+    value: "{{stayId}}"
+    description: opcional
+order: 2000

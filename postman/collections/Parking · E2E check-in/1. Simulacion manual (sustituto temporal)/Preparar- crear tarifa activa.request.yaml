@@ -1,0 +1,24 @@
+$kind: http-request
+name: "Preparar: crear tarifa activa"
+description: Sin tarifa activa para el tipo de vehiculo no hay importe que aplicar. En el flujo real la resolveria stay via `StayTariffPort`.
+url: "{{baseUrlTariff}}/v1/tariffs"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "name": "E2E - tarifa coche",
+      "type": "{{vehicleType}}",
+      "pricePerMinute": 0.05,
+      "basePrice": 1.0,
+      "active": true
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('201 Created', () => pm.response.to.have.status(201));
+      pm.environment.set('tariffId', pm.response.json().id);
+    language: text/javascript
+order: 1000

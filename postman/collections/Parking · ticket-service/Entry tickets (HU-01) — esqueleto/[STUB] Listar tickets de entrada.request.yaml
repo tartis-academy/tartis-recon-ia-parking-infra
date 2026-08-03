@@ -1,0 +1,5 @@
+$kind: http-request
+description: GET /v1/entry-tickets. `return null` -> 200 con cuerpo vacio.
+url: "{{baseUrlTicket}}/v1/entry-tickets"
+method: GET
+order: 2000

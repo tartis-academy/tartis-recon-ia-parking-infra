@@ -1,0 +1,9 @@
+$kind: http-request
+description: Declarado en el contrato -> 404.
+url: "{{baseUrlStay}}/v1/stays?status=IN_PROGRESS"
+method: GET
+queryParams:
+  - key: status
+    value: IN_PROGRESS
+    description: IN_PROGRESS | PAY_PENDING | PAID | FINISHED | CANCELLED
+order: 4000

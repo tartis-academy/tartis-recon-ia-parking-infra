@@ -1,0 +1,3 @@
+$kind: collection
+description: El flujo tal y como debe quedar. Requiere la rama feature/checkin-usecase.
+order: 2000

@@ -1,0 +1,23 @@
+$kind: http-request
+name: "PATCH /status (OJO: cambia el TIPO, no el estado)"
+description: |-
+  PATCH /v1/spots/{id}/status -> 200.
+
+  **El nombre miente.** Recibe `SpotRequest` (`{"type": ...}`) y llama a `UpdateSpotUseCase`, exactamente igual que el PUT: cambia el TIPO de la plaza, no su `status`. No hay forma por REST de poner una plaza en `UNAVAILABLE`.
+
+  Se deja en la coleccion porque `StaySpotClientAdapter.updateSpotStatus` la llama tal cual.
+url: "{{baseUrlSpot}}/v1/spots/{{spotId}}/status"
+method: PATCH
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "type": "{{vehicleType}}"
+    }
+scripts:
+  - type: afterResponse
+    code: pm.test('200 OK', () => pm.response.to.have.status(200));
+    language: text/javascript
+order: 8000

@@ -1,0 +1,16 @@
+$kind: http-request
+description: |-
+  Declarado en el openapi.yml, sin metodo en `StayRestAdapter` -> 404.
+
+  Bloqueado por dos cosas: `POST /v1/tariffs/calculate` no existe en tariff-service, y `issueExitTicket` apunta a una ruta inexistente (`/v1/tickets/exit`).
+url: "{{baseUrlStay}}/v1/stays/check-out"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "plate": "{{plate}}"
+    }
+order: 1000

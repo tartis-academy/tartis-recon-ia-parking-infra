@@ -1,0 +1,18 @@
+$kind: http-request
+description: Debe incluir el checkout que se acaba de hacer en la carpeta 3 (misma matricula/stayId de esa corrida).
+url: "{{baseUrlStay}}/v1/stays?status=FINISHED&page=0&size=5"
+method: GET
+queryParams:
+  status: FINISHED
+  page: "0"
+  size: "5"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200 OK', () => pm.response.to.have.status(200));
+      const body = pm.response.json();
+      pm.test('todas las estancias devueltas estan FINISHED', () => {
+        body.content.forEach((stay) => pm.expect(stay.status).to.eql('FINISHED'));
+      });
+    language: text/javascript
+order: 2000

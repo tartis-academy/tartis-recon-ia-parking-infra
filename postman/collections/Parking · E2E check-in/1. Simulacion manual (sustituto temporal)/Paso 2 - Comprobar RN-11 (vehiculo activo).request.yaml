@@ -1,0 +1,12 @@
+$kind: http-request
+description: "RN-11: un vehiculo desactivado no puede entrar. En el flujo real esta comprobacion vive dentro del `CheckInUseCase`; aqui la hacemos a mano."
+url: "{{baseUrlVehicle}}/v1/vehicles/plate/{{plate}}"
+method: GET
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200 OK', () => pm.response.to.have.status(200));
+      pm.test('RN-11: el vehiculo esta activo', () =>
+        pm.expect(pm.response.json().active).to.be.true);
+    language: text/javascript
+order: 4000
