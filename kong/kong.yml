@@ -66,24 +66,6 @@ services:
               claims_to_verify: ["exp"]
               uri_param_names: []
 
-  # stay-service expondra ademas un endpoint SSE (SSE-08, pendiente). No tocar
-  # esta ruta para incluirlo: hay que crear una ruta nueva, porque necesita dos
-  # cosas distintas de las demas.
-  #
-  #   1. jwt leyendo el token de la query string, no de la cabecera: la API
-  #      EventSource del navegador no permite cabeceras propias. Es decir
-  #      uri_param_names: ["access_token"] (NO "jwt", el default de Kong: el
-  #      front manda ?token=, Kong por defecto esperaria ?jwt= y Spring lee
-  #      ?access_token=; los tres se alinean en access_token -RFC 6750-,
-  #      el unico nombre con el que el resolver de Spring detecta token
-  #      smuggling de fabrica) y header_names: [], la unica excepcion al
-  #      resto del fichero.
-  #   2. file-log a nivel de route con custom_fields_by_lua, porque el
-  #      serializer de Kong NO redacta la query string y el token acabaria en
-  #      los logs (ver la nota del plugin file-log mas abajo).
-  #
-  # scripts/ci/validate_kong.py exige las dos cosas para el nombre de ruta
-  # stay-service-events-route, asi que el CI bloquea si SSE-08 entra sin ellas.
   - name: stay-service
     url: http://stay-service:8080/v1/stays
     routes:
@@ -96,6 +78,54 @@ services:
             config:
               claims_to_verify: ["exp"]
               uri_param_names: []
+
+  # SSE-08 — stream de eventos de stay-service. Ruta aparte de stay-service-route
+  # porque es la unica del fichero que se sale de tres invariantes, todas por la
+  # misma razon: la API EventSource del navegador no deja poner cabeceras.
+  #
+  #   1. El token va en la query string (uri_param_names) y NO por cabecera
+  #      (header_names: []). El nombre es access_token, el del RFC 6750: es el
+  #      que manda el front (use-sse.ts) y el unico con el que el resolver de
+  #      Spring detecta token smuggling de fabrica. NO es "jwt", el default de
+  #      Kong.
+  #   2. file-log propio con custom_fields_by_lua: el serializer de Kong redacta
+  #      la cabecera Authorization de oficio, pero NO la query string, y la
+  #      duplica en CUATRO campos (ver la nota del file-log global mas abajo).
+  #      Sin esto el token acabaria en `docker logs parking-kong`. Ojo tambien
+  #      con KONG_PROXY_ACCESS_LOG, que es otro stream y no lo tapa este plugin:
+  #      ver KONG_NGINX_HTTP_LOG_FORMAT en docker-compose.yml.
+  #   3. response_buffering: false. Con el default (true) Kong acumula la
+  #      respuesta antes de devolverla, y un stream que no termina nunca no llega
+  #      al cliente: el navegador se queda con la conexion abierta y sin eventos.
+  #
+  # scripts/ci/validate_kong.py exige (1) y (2) para el nombre de ruta
+  # stay-service-events-route; (3) no lo puede comprobar, se verifica en la demo.
+  - name: stay-service-events
+    url: http://stay-service:8080/v1/events
+    # El default son 60s: la conexion se cortaria sola cada minuto aunque el
+    # stream siga vivo. Por encima de los 30 min de SSE_EMITTER_TIMEOUT_MS, que
+    # es quien debe cerrar el emitter, no Kong.
+    read_timeout: 3600000
+    routes:
+      - name: stay-service-events-route
+        paths:
+          - /api/v1/events
+        strip_path: true
+        response_buffering: false
+        plugins:
+          - name: jwt
+            config:
+              claims_to_verify: ["exp"]
+              uri_param_names: ["access_token"]
+              header_names: []
+          - name: file-log
+            config:
+              path: /dev/stdout
+              custom_fields_by_lua:
+                request.uri: "return '/api/v1/events'"
+                request.url: "return 'REDACTED'"
+                request.querystring: "return 'REDACTED'"
+                upstream_uri: "return 'REDACTED'"
 
   # ActiveStayRestAdapter expone /v1/activeStay en stay-service, la unica ruta
   # en camelCase del proyecto (el resto usa kebab-case: entry-tickets,
@@ -233,13 +263,17 @@ plugins:
   #   docker logs parking-kong --tail 1 | grep -o '"authorization":"[^"]*"'
   #   -> "authorization":"REDACTED"
   #
-  # Lo que NO redacta es la query string, y la mete en tres campos
-  # (request.uri, request.url, request.querystring). Irrelevante en estas 7
-  # rutas, donde el token va en cabecera. CRITICO en la ruta SSE (SSE-08),
-  # donde EventSource obliga a mandarlo en la URL: alli hay que declarar
-  # file-log a nivel de route con custom_fields_by_lua para taparlos. El
-  # validador de scripts/ci lo exige, asi que la ruta SSE no puede entrar sin
-  # esa redaccion.
+  # Lo que NO redacta es la query string, y la mete en cuatro campos
+  # (request.uri, request.url, request.querystring y upstream_uri). Irrelevante
+  # en las rutas donde el token va en cabecera. La excepcion es
+  # stay-service-events-route, que lo lleva en la URL y por eso declara su
+  # propio file-log con custom_fields_by_lua tapando los cuatro (arriba). Un
+  # plugin declarado a nivel de route sustituye al global del mismo nombre, no
+  # se suman: la ruta SSE se sigue registrando, con esos campos redactados.
+  #
+  # Fuga residual conocida: una peticion con ?access_token= a una ruta NO-SSE la
+  # rechaza Kong con 401, pero la registra este file-log global, que no redacta.
+  # Ningun cliente hace eso; cerrarlo costaria la query string en todas las rutas.
   - name: file-log
     config:
       path: /dev/stdout
