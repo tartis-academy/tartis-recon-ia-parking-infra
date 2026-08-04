@@ -90,8 +90,10 @@ services:
   #      Kong.
   #   2. file-log propio con custom_fields_by_lua: el serializer de Kong redacta
   #      la cabecera Authorization de oficio, pero NO la query string, y la
-  #      duplica en tres campos (ver la nota del file-log global mas abajo). Sin
-  #      esto el token acabaria en `docker logs parking-kong`.
+  #      duplica en CUATRO campos (ver la nota del file-log global mas abajo).
+  #      Sin esto el token acabaria en `docker logs parking-kong`. Ojo tambien
+  #      con KONG_PROXY_ACCESS_LOG, que es otro stream y no lo tapa este plugin:
+  #      ver KONG_NGINX_HTTP_LOG_FORMAT en docker-compose.yml.
   #   3. response_buffering: false. Con el default (true) Kong acumula la
   #      respuesta antes de devolverla, y un stream que no termina nunca no llega
   #      al cliente: el navegador se queda con la conexion abierta y sin eventos.
@@ -123,6 +125,7 @@ services:
                 request.uri: "return '/api/v1/events'"
                 request.url: "return 'REDACTED'"
                 request.querystring: "return 'REDACTED'"
+                upstream_uri: "return 'REDACTED'"
 
   # ActiveStayRestAdapter expone /v1/activeStay en stay-service, la unica ruta
   # en camelCase del proyecto (el resto usa kebab-case: entry-tickets,
@@ -260,13 +263,17 @@ plugins:
   #   docker logs parking-kong --tail 1 | grep -o '"authorization":"[^"]*"'
   #   -> "authorization":"REDACTED"
   #
-  # Lo que NO redacta es la query string, y la mete en tres campos
-  # (request.uri, request.url, request.querystring). Irrelevante en las rutas
-  # donde el token va en cabecera. La excepcion es stay-service-events-route,
-  # que lo lleva en la URL y por eso declara su propio file-log con
-  # custom_fields_by_lua tapando los tres campos (arriba). Un plugin declarado a
-  # nivel de route sustituye al global del mismo nombre, no se suman: la ruta
-  # SSE se sigue registrando, con esos tres campos redactados.
+  # Lo que NO redacta es la query string, y la mete en cuatro campos
+  # (request.uri, request.url, request.querystring y upstream_uri). Irrelevante
+  # en las rutas donde el token va en cabecera. La excepcion es
+  # stay-service-events-route, que lo lleva en la URL y por eso declara su
+  # propio file-log con custom_fields_by_lua tapando los cuatro (arriba). Un
+  # plugin declarado a nivel de route sustituye al global del mismo nombre, no
+  # se suman: la ruta SSE se sigue registrando, con esos campos redactados.
+  #
+  # Fuga residual conocida: una peticion con ?access_token= a una ruta NO-SSE la
+  # rechaza Kong con 401, pero la registra este file-log global, que no redacta.
+  # Ningun cliente hace eso; cerrarlo costaria la query string en todas las rutas.
   - name: file-log
     config:
       path: /dev/stdout

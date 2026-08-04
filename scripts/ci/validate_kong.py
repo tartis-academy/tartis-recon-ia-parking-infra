@@ -171,7 +171,10 @@ def check_request_logging(config):
 def check_sse_route_redacts_query_string(config):
     """
     El serializer de Kong redacta la cabecera Authorization, pero NO la query
-    string, y la duplica en request.uri, request.url y request.querystring.
+    string, y la duplica en cuatro campos: request.uri, request.url,
+    request.querystring y upstream_uri. Verificado contra kong 3.9 leyendo un
+    log real: upstream_uri se paso por alto al escribir esta comprobacion y el
+    token seguia apareciendo pese a redactar los otros tres.
 
     La ruta SSE es la unica que manda el token en la URL (EventSource no admite
     cabeceras), asi que es la unica donde file-log filtraria el token. Tiene que
@@ -182,7 +185,12 @@ def check_sse_route_redacts_query_string(config):
     proposito: cuando alguien anada esa ruta, el CI le recuerda el requisito en
     el momento, en vez de descubrirse en una auditoria posterior.
     """
-    required_fields = {"request.uri", "request.url", "request.querystring"}
+    required_fields = {
+        "request.uri",
+        "request.url",
+        "request.querystring",
+        "upstream_uri",
+    }
 
     for service in config.get("services", []):
         for route in service.get("routes", []):

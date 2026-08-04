@@ -102,7 +102,14 @@ services:
     environment:
       KONG_DATABASE: "off"
       KONG_DECLARATIVE_CONFIG: /kong/declarative/kong.yml
-      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      # El formato por defecto registra $request, que incluye la query string y
+      # por tanto el ?access_token= de la ruta SSE. $uri es la ruta sin query.
+      # Este log es un stream aparte del plugin file-log: la redaccion de
+      # custom_fields_by_lua no lo alcanza (SSE-08).
+      # Los $$ son escape de Compose, no de nginx: con un solo $ Compose los
+      # interpolaria como variables suyas y llegarian vacios.
+      KONG_NGINX_HTTP_LOG_FORMAT: 'sin_query_string "$$remote_addr - $$remote_user [$$time_local] \"$$request_method $$uri $$server_protocol\" $$status $$body_bytes_sent \"$$http_referer\" \"$$http_user_agent\" kong_request_id: \"$$kong_request_id\""'
+      KONG_PROXY_ACCESS_LOG: /dev/stdout sin_query_string
       KONG_ADMIN_ACCESS_LOG: /dev/stdout
       KONG_PROXY_ERROR_LOG: /dev/stderr
       KONG_ADMIN_ERROR_LOG: /dev/stderr
