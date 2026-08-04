@@ -11,6 +11,27 @@ repo (convención del proyecto). Depende de `keycloak` y `rabbitmq`
 (definidos en `docker-compose.yml`), así que **no se levanta en solitario**:
 siempre combinado con el otro fichero.
 
+## Qué script uso
+
+Tres scripts, cada uno pensado para un caso distinto — la confusión más
+habitual es pensar que "dev" en `docker-compose.dev.yml` tiene algo que ver
+con qué tan completo es el stack. No es así: es solo qué Postgres usan los
+microservicios (compartido vs. dedicado), no si se levanta la plataforma
+entera ni si hay 1 contenedor o 16.
+
+| Script | Ficheros compose | Qué levanta | Selección de servicios | Cuándo usarlo |
+|---|---|---|---|---|
+| `./dev-db.sh` | `docker-compose.dev.yml` | Solo el Postgres compartido de dev (schema por servicio), sin pgAdmin | Todo o nada | Programar contra la BD sin tocar Docker a mano; además sincroniza el `.env` de cada microservicio |
+| `./setup.sh` (sin flags) | `docker-compose.yml` + `docker-compose.dev.yml` | Plataforma (Keycloak/Kong/RabbitMQ) + Postgres dev + pgAdmin | Todo o nada | Día a día: cada micro corriendo en tu IDE con perfil `dev`, contra el Postgres compartido |
+| `./setup.sh -f` | `docker-compose.yml` + `docker-compose.demo.yml` | Plataforma + los 5 microservicios + frontend, perfil `prod`, Postgres dedicado por servicio | `-s vehicle,spot` levanta solo ese subconjunto (+ sus dependencias) | Levantar rápido el stack completo, o solo una parte, sin esperar healthchecks |
+| `./demo-stack.sh` | `docker-compose.yml` + `docker-compose.demo.yml` (**mismo stack que `setup.sh -f`, nunca toca `docker-compose.dev.yml`**) | Lo mismo que `setup.sh -f`: plataforma + 5 micros + mfe-entryexit + frontend | Sin `-s`. Solo `up --no-frontend`, o `restart <servicio>` para rehacer uno ya levantado | Cuando necesitas confirmar que TODO llegó a `healthy` antes de seguir (demos, scripts encadenados); `status`/`info` para ver puertos y estado sin levantar nada |
+
+En corto: si quieres elegir qué microservicios arrancan, es `setup.sh -f -s
+...`, `demo-stack.sh` no tiene esa opción. Si quieres la garantía de que todo
+terminó `healthy` (o saber puertos/estado de un vistazo), es `demo-stack.sh`.
+`dev-db.sh` y `setup.sh` (sin `-f`) son el único par que toca
+`docker-compose.dev.yml`; todo lo demás usa `docker-compose.demo.yml`.
+
 ## Solo la BD, sin configurar nada a mano
 
 Si lo único que quieres es programar contra la BD compartida, `./dev-db.sh`
@@ -53,6 +74,24 @@ levanta además pgAdmin, y no toca los `.env` de los servicios.
 ```
 
 (`full`/`down`/`clean` sin guion también funcionan, por compatibilidad con la sintaxis anterior.)
+
+Para una demo (levantar y comprobar que todo llega a `healthy`, con estado y
+reinicio de un servicio suelto), `./demo-stack.sh` envuelve el mismo stack
+`full` con más feedback:
+
+```bash
+./demo-stack.sh up              # build + up + espera healthchecks de los 16 contenedores
+./demo-stack.sh up --no-frontend
+./demo-stack.sh status          # solo el estado actual, sin levantar nada
+./demo-stack.sh restart ticket-service   # rebuild + recreate de uno solo
+./demo-stack.sh info            # puertos/URLs + estado
+./demo-stack.sh down [--clean]
+```
+
+`./setup.sh -f` sigue siendo la opción para levantar rápido o para un
+subconjunto (`-s`); `./demo-stack.sh` es para cuando necesitas saber con
+certeza que todo terminó healthy antes de seguir (p. ej. antes de una demo o
+en un script que encadena pasos).
 
 Si prefieres ir a mano:
 

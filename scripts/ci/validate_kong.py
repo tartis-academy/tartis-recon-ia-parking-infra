@@ -26,7 +26,7 @@ SSE_ROUTES = {"stay-service-events-route"}
 # datos de negocio, asi que quedan fuera a proposito de la invariante "toda
 # ruta lleva jwt" (GW-03 protege datos, no estaticos). Si el nombre real de
 # una ruta cambia, actualizar este set (y solo este set) en el mismo PR.
-PUBLIC_STATIC_ROUTES = {"shell-route", "mfe-entryexit-route"}
+PUBLIC_STATIC_ROUTES = {"shell-route", "mfe-entryexit-route", "mfe-admin-route"}
 
 # GW-06: nombre acordado entre Kong (plugin correlation-id) y los
 # microservicios (CorrelationIdFilter). Cambiarlo en un solo lado corta la
