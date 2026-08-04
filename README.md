@@ -80,7 +80,8 @@ reinicio de un servicio suelto), `./demo-stack.sh` envuelve el mismo stack
 `full` con más feedback:
 
 ```bash
-./demo-stack.sh up              # build + up + espera healthchecks de los 16 contenedores
+./demo-stack.sh up              # build + up + espera healthchecks + siembra datos
+./demo-stack.sh up --no-seed    # igual, pero sin sembrar
 ./demo-stack.sh up --no-frontend
 ./demo-stack.sh status          # solo el estado actual, sin levantar nada
 ./demo-stack.sh restart ticket-service   # rebuild + recreate de uno solo
@@ -92,6 +93,27 @@ reinicio de un servicio suelto), `./demo-stack.sh` envuelve el mismo stack
 subconjunto (`-s`); `./demo-stack.sh` es para cuando necesitas saber con
 certeza que todo terminó healthy antes de seguir (p. ej. antes de una demo o
 en un script que encadena pasos).
+
+### Datos de demo
+
+`demo-stack.sh up` termina llamando a `scripts/seed-demo-data.sh`, que deja el
+sistema listo para hacer check-in: **50 plazas** (20 `CAR`, 20 `MOTORBIKE`, 10
+`CAR_PMR`) y **una tarifa activa por tipo**. Sin tarifa activa el check-in
+responde `409`, y sin plazas libres no hay nada que ocupar: son precondiciones
+de negocio, no un fallo del stack.
+
+El script es **idempotente**: cuenta lo que ya existe y crea solo lo que falta
+hasta el cupo. Importa porque las BD son volúmenes persistentes — si no lo
+fuera, cada `up` añadiría otras 50 plazas.
+
+```bash
+./scripts/seed-demo-data.sh                      # a mano, mismos cupos
+SPOTS_CAR=40 ./scripts/seed-demo-data.sh         # cupo distinto
+./demo-stack.sh down --clean                     # BD desde cero; el siguiente up siembra las 50
+```
+
+Si levantas con `setup.sh` o con `docker compose` directamente, el seed **no**
+se ejecuta: lánzalo a mano.
 
 Si prefieres ir a mano:
 

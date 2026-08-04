@@ -6,8 +6,13 @@
 # antes de devolver el control. Combina docker-compose.yml y
 # docker-compose.demo.yml con el .env unificado (no .env.demo).
 #
+# Al terminar siembra datos de demo (50 plazas: 20 CAR, 20 MOTORBIKE, 10
+# CAR_PMR, mas una tarifa activa por tipo) con scripts/seed-demo-data.sh, que es
+# idempotente: rellena hasta el cupo, no duplica en arranques sucesivos.
+#
 # Uso:
-#   ./demo-stack.sh up              levanta y espera healthchecks
+#   ./demo-stack.sh up              levanta, espera healthchecks y siembra
+#   ./demo-stack.sh up --no-seed       igual, sin sembrar datos
 #   ./demo-stack.sh up --no-frontend   igual, sin el contenedor del frontend
 #   ./demo-stack.sh down            para los contenedores (mantiene datos)
 #   ./demo-stack.sh down --clean    para y BORRA los volumenes de datos
@@ -86,6 +91,12 @@ print_status() {
 cmd_up() {
   local services=("${ALL_SERVICES[@]}")
   local containers=("${CONTAINERS[@]}")
+  local seed=1
+  local args=() a
+  for a in "$@"; do
+    if [ "$a" = "--no-seed" ]; then seed=0; else args+=("$a"); fi
+  done
+  set -- ${args[@]+"${args[@]}"}
   if [ "${1:-}" = "--no-frontend" ]; then
     local filtered=() s
     for s in "${services[@]}"; do
@@ -124,6 +135,23 @@ cmd_up() {
   echo
   print_status
   echo
+
+  # Sembrar despues de los healthchecks: el seed va por Kong y necesita
+  # keycloak, spot-service y tariff-service arriba. Es idempotente, asi que
+  # repetirlo en cada `up` no multiplica los datos.
+  if [ "$seed" -eq 1 ] && [ "$failed" -eq 0 ]; then
+    info "Sembrando datos de demo"
+    if ./scripts/seed-demo-data.sh; then
+      echo
+    else
+      warn "El seed fallo. El stack esta arriba; reintenta con ./scripts/seed-demo-data.sh"
+      echo
+    fi
+  elif [ "$seed" -eq 0 ]; then
+    warn "Seed omitido (--no-seed)."
+    echo
+  fi
+
   if [ "$failed" -eq 0 ]; then
     info "${GREEN}Stack de demo listo${OFF}"
   else
@@ -176,10 +204,10 @@ cmd_restart() {
 }
 
 case "${1:-}" in
-  up)      shift; cmd_up "${1:-}" ;;
+  up)      shift; cmd_up "$@" ;;
   down)    shift; cmd_down "${1:-}" ;;
   status)  print_status ;;
   restart) shift; cmd_restart "${1:-}" ;;
   info|-info|--info) cmd_info ;;
-  *) die "Uso: $0 {up [--no-frontend] | down [--clean] | status | restart <servicio> | info}" ;;
+  *) die "Uso: $0 {up [--no-frontend] [--no-seed] | down [--clean] | status | restart <servicio> | info}" ;;
 esac
