@@ -10,6 +10,7 @@ resources:
   - 03-rabbitmq.yaml
   - 04-keycloak.yaml
   - 05-kong.yaml
+  - 06-frontends.yaml
   - 10-vehicle.yaml
   - 11-spot.yaml
   - 12-tariff.yaml

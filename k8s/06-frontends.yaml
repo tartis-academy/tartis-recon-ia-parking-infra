@@ -1,0 +1,173 @@
+# Los tres se sirven a traves de Kong (rutas /, /mfe/entryexit, /mfe/admin en
+# kong.yml), no publican puerto propio. Module Federation resuelve los remotos
+# por ruta relativa, asi que las imagenes valen sin reconstruir.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: parking
+  labels:
+    app.kubernetes.io/name: frontend
+    app.kubernetes.io/part-of: parking
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: frontend
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: frontend
+        app.kubernetes.io/part-of: parking
+    spec:
+      containers:
+        - name: nginx
+          image: parking/frontend:demo
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: 20m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: parking
+spec:
+  selector:
+    app.kubernetes.io/name: frontend
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mfe-entryexit
+  namespace: parking
+  labels:
+    app.kubernetes.io/name: mfe-entryexit
+    app.kubernetes.io/part-of: parking
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mfe-entryexit
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: mfe-entryexit
+        app.kubernetes.io/part-of: parking
+    spec:
+      containers:
+        - name: nginx
+          image: parking/mfe-entryexit:demo
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: 20m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mfe-entryexit
+  namespace: parking
+spec:
+  selector:
+    app.kubernetes.io/name: mfe-entryexit
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mfe-admin
+  namespace: parking
+  labels:
+    app.kubernetes.io/name: mfe-admin
+    app.kubernetes.io/part-of: parking
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mfe-admin
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: mfe-admin
+        app.kubernetes.io/part-of: parking
+    spec:
+      containers:
+        - name: nginx
+          image: parking/mfe-admin:demo
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: 20m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mfe-admin
+  namespace: parking
+spec:
+  selector:
+    app.kubernetes.io/name: mfe-admin
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

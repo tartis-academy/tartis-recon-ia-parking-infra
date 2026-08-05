@@ -3,8 +3,14 @@
 Despliegue del stack sobre un cluster local, en paralelo a Compose. **Compose
 sigue siendo el camino oficial de la demo**: esto no lo sustituye ni lo toca.
 
-Estado actual (bloques A y B): los 5 microservicios + sus 5 Postgres + RabbitMQ
-+ Keycloak con su Postgres + Kong. Los 3 frontends siguen solo en Compose.
+Estado actual: el stack completo, los mismos 17 componentes que levanta
+`demo-stack.sh`. Falta el bloque D (HPA, PDB, `k8s-stack.sh`) y la verificacion
+E2E con Newman.
+
+> [!warning] Los dos stacks son excluyentes
+> `iss`, `redirect-uri` del realm y CORS de `kong.yml` estan fijados a
+> `localhost:8000` / `localhost:8180`. Hay que parar Compose (`./demo-stack.sh
+> down`) antes de exponer el cluster en esos puertos.
 
 ## Requisitos
 
@@ -24,6 +30,22 @@ kubectl get pods -n parking -w
 
 `sync-config.sh` hay que repetirlo cada vez que cambie `kong/kong.yml` o el
 realm: son la fuente de verdad y no se copian dentro de `k8s/`.
+
+Para usarlo desde el navegador, con Compose parado:
+
+```bash
+./demo-stack.sh down
+./k8s/expose.sh               # 8000 (Kong) y 8180 (Keycloak), bloquea hasta Ctrl-C
+```
+
+Solo se exponen esos dos puertos: el shell, los 2 MFEs y los 5 microservicios
+se alcanzan a traves de Kong.
+
+| URL | Que es |
+|---|---|
+| `http://localhost:8000/` | Shell (Module Federation carga los MFEs por ruta relativa) |
+| `http://localhost:8000/api/v1/...` | API a traves del gateway |
+| `http://localhost:8180/` | Keycloak |
 
 Parar sin perder datos: `minikube stop -p parking`.
 Borrar el cluster entero: `minikube delete -p parking`.
@@ -59,13 +81,17 @@ kubectl -n parking exec deploy/stay-service -- wget -qO- http://spot-service:808
   imagen es distroless y en Compose hace falta el truco de `/dev/tcp`, pero el
   `httpGet` lo ejecuta el kubelet desde fuera del contenedor.
 
+- `expose.sh` usa `kubectl port-forward`, que es un proceso que puede caerse a
+  mitad de demo. Alternativa mas robusta si se recrea el cluster: publicar los
+  puertos en el propio nodo con `minikube start --ports=8000:30800,8180:30818`
+  y NodePort, que no necesita ningun proceso vivo.
+
 ## Pendiente
 
-- Bloque C: exposicion manteniendo los puertos actuales (8000, 8180, 5173, 5001,
-  5002) para no reconstruir los frontends, que hornean las URLs en build time,
-  y los 3 frontends desplegados.
 - Bloque D: HPA en stay-service, PodDisruptionBudget, `k8s-stack.sh` y guion de
   la demo.
+- Verificacion E2E con Newman contra el cluster (RECON-822), que es la que
+  decide si Kubernetes se usa en la demo. Requiere parar Compose.
 - Tras un `minikube stop`/`start` los microservicios se reinician una vez porque
   su Postgres todavia no acepta conexiones. Se recuperan solos; si molesta en la
   demo, la solucion es un `initContainer` que espere a la BD.

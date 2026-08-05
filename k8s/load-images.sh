@@ -13,6 +13,7 @@ set -euo pipefail
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/.."
 
 SERVICES=(vehicle spot tariff ticket stay)
+FRONTENDS=(frontend mfe-entryexit mfe-admin)
 BASE_IMAGES=(postgres:15.18-alpine rabbitmq:4-management quay.io/keycloak/keycloak:26.7.0 kong:3.9)
 COMPOSE_PROJECT="tartis-recon-ia-parking-infra"
 COMPOSE_FILES=(-f docker-compose.yml -f docker-compose.demo.yml)
@@ -31,6 +32,20 @@ for svc in "${SERVICES[@]}"; do
   if [ "$BUILD" = true ] || ! docker image inspect "$src" >/dev/null 2>&1; then
     echo "==> construyendo ${svc}-service con Compose"
     docker compose "${COMPOSE_FILES[@]}" build "${svc}-service"
+  fi
+
+  echo "==> ${src} -> ${dst}"
+  docker tag "$src" "$dst"
+  minikube image load -p "$PROFILE" "$dst"
+done
+
+for fe in "${FRONTENDS[@]}"; do
+  src="${COMPOSE_PROJECT}-${fe}:latest"
+  dst="parking/${fe}:demo"
+
+  if [ "$BUILD" = true ] || ! docker image inspect "$src" >/dev/null 2>&1; then
+    echo "==> construyendo ${fe} con Compose"
+    docker compose "${COMPOSE_FILES[@]}" build "${fe}"
   fi
 
   echo "==> ${src} -> ${dst}"
