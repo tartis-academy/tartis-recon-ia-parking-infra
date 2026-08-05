@@ -13,7 +13,7 @@ set -euo pipefail
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/.."
 
 SERVICES=(vehicle spot tariff ticket stay)
-BASE_IMAGES=(postgres:15.18-alpine rabbitmq:4-management)
+BASE_IMAGES=(postgres:15.18-alpine rabbitmq:4-management quay.io/keycloak/keycloak:26.7.0 kong:3.9)
 COMPOSE_PROJECT="tartis-recon-ia-parking-infra"
 COMPOSE_FILES=(-f docker-compose.yml -f docker-compose.demo.yml)
 PROFILE="${MINIKUBE_PROFILE:-parking}"
@@ -47,4 +47,4 @@ for img in "${BASE_IMAGES[@]}"; do
 done
 
 echo "Listo. Imagenes en el nodo:"
-minikube image ls -p "$PROFILE" | grep -E "parking/|postgres|rabbitmq" | sort
+minikube image ls -p "$PROFILE" | grep -E "parking/|postgres|rabbitmq|keycloak|kong" | sort

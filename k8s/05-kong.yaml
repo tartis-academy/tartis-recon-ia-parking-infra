@@ -1,0 +1,102 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kong
+  namespace: parking
+  labels:
+    app.kubernetes.io/name: kong
+    app.kubernetes.io/part-of: parking
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kong
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: kong
+        app.kubernetes.io/part-of: parking
+    spec:
+      containers:
+        - name: kong
+          image: kong:3.9
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: proxy
+              containerPort: 8000
+            - name: admin
+              containerPort: 8001
+          env:
+            - name: KONG_DATABASE
+              value: "off"
+            - name: KONG_DECLARATIVE_CONFIG
+              value: /kong/declarative/kong.yml
+            # $uri en vez de $request: la ruta SSE lleva el token en la query
+            # string y el formato por defecto lo escribiria en el log (SSE-08).
+            # Un solo $, no $$: aqui no hay interpolacion de Compose.
+            - name: KONG_NGINX_HTTP_LOG_FORMAT
+              value: 'sin_query_string "$remote_addr - $remote_user [$time_local] \"$request_method $uri $server_protocol\" $status $body_bytes_sent \"$http_referer\" \"$http_user_agent\" kong_request_id: \"$kong_request_id\""'
+            - name: KONG_PROXY_ACCESS_LOG
+              value: /dev/stdout sin_query_string
+            - name: KONG_ADMIN_ACCESS_LOG
+              value: /dev/stdout
+            - name: KONG_PROXY_ERROR_LOG
+              value: /dev/stderr
+            - name: KONG_ADMIN_ERROR_LOG
+              value: /dev/stderr
+            - name: KONG_ADMIN_LISTEN
+              value: 0.0.0.0:8001
+            # Por defecto arranca un worker por core (8 en este nodo) y el
+            # conjunto no cabe en el limit; los workers morian con signal 9.
+            - name: KONG_NGINX_WORKER_PROCESSES
+              value: "2"
+          volumeMounts:
+            - name: declarative
+              mountPath: /kong/declarative
+              readOnly: true
+          startupProbe:
+            httpGet:
+              path: /status
+              port: admin
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 24
+          readinessProbe:
+            httpGet:
+              path: /status
+              port: admin
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /status
+              port: admin
+            periodSeconds: 15
+            timeoutSeconds: 5
+          resources:
+            requests:
+              cpu: 100m
+              memory: 384Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+      volumes:
+        - name: declarative
+          configMap:
+            name: kong-declarative
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kong
+  namespace: parking
+spec:
+  selector:
+    app.kubernetes.io/name: kong
+  ports:
+    - name: proxy
+      port: 8000
+      targetPort: proxy
+    - name: admin
+      port: 8001
+      targetPort: admin
