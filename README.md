@@ -208,17 +208,17 @@ plugin `jwt` no lee `realm_access.roles` — la autorización por rol vive en
 Spring Security (`@PreAuthorize`, ticket SEC-10, pendiente en cada backend),
 que devuelve 403. Ver [ADR-0001](docs/adr/0001-reparto-autorizacion-kong-spring-security.md).
 
-`uri_param_names: []` en las 7 rutas: por defecto ese campo vale `["jwt"]`, así
-que sin fijarlo Kong aceptaría el token por query string y acabaría en el
-access log, en el historial del navegador y en la cabecera `Referer`.
+`uri_param_names: []` en todas las rutas de API menos una: por defecto ese
+campo vale `["jwt"]`, así que sin fijarlo Kong aceptaría el token por query
+string y acabaría en el access log, en el historial del navegador y en la
+cabecera `Referer`.
 
-Pendiente (fuera de este repo o de esta sesión): CORS ya configurado en Kong
-para `:8090`/`:5173`, pero el frontend sigue llamando directo a cada
-microservicio (su `nginx.conf`, en el repo del frontend) en vez de a Kong —
-y con la ruta `/v1/...` vieja, no `/api/v1/...`. La ruta SSE de `stay-service`
-(SSE-08) todavía no existe; cuando se añada necesita su propia ruta que lea el
-token de la query string (`EventSource` no admite cabeceras) y que redacte esa
-query string en el log.
+La excepción es `stay-service-events-route` (`/api/v1/events`, SSE-08), donde
+`EventSource` no admite cabeceras y el token tiene que ir en la URL sí o sí.
+Por eso es la única ruta con `uri_param_names: ["access_token"]` +
+`header_names: []`, y la única con `file-log` propio: el serializer de Kong
+redacta la cabecera `Authorization` de oficio, pero **no** la query string.
+`scripts/ci/validate_kong.py` exige las dos cosas para ese nombre de ruta.
 
 Verificar (con el stack `full` arriba, token de arriba en `$TOKEN`):
 
@@ -226,6 +226,11 @@ Verificar (con el stack `full` arriba, token de arriba en `$TOKEN`):
 curl -i http://localhost:8000/api/v1/vehicles                              # sin token -> 401
 curl -i http://localhost:8000/api/v1/vehicles -H "Authorization: Bearer $TOKEN"  # token valido
 curl -i "http://localhost:8000/api/v1/vehicles?jwt=$TOKEN"                 # token en la URL -> 401
+
+# SSE: al reves que el resto, solo por query string y solo con access_token
+curl -N "http://localhost:8000/api/v1/events?access_token=$TOKEN"          # stream abierto
+curl -i "http://localhost:8000/api/v1/events" -H "Authorization: Bearer $TOKEN"  # cabecera -> 401
+docker logs parking-kong --tail 1 | grep -o '"querystring":[^,]*'          # -> "REDACTED"
 ```
 
 Cambios en `kong.yml` requieren `docker compose restart kong` (no hay
