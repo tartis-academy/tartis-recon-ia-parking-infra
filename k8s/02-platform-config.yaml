@@ -1,0 +1,13 @@
+# Mismo desdoble que en docker-compose.demo.yml: jwk-set-uri es interno (el pod
+# resuelve keycloak por DNS del cluster), issuer-uri es el publico del token.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: parking-platform
+  namespace: parking
+data:
+  SPRING_PROFILES_ACTIVE: prod
+  SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: http://localhost:8180/realms/parking
+  SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/parking/protocol/openid-connect/certs
+  KEYCLOAK_TOKEN_URI: http://keycloak:8080/realms/parking/protocol/openid-connect/token
+  SPRING_RABBITMQ_HOST: rabbitmq

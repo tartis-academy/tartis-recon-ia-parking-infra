@@ -1,0 +1,210 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: stay-db-data
+  namespace: parking
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stay-db
+  namespace: parking
+  labels:
+    app.kubernetes.io/name: stay-db
+    app.kubernetes.io/part-of: parking
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: stay-db
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: stay-db
+        app.kubernetes.io/part-of: parking
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:15.18-alpine
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: postgres
+              containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: stay-db-credentials
+                  key: db-name
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: stay-db-credentials
+                  key: db-user
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: stay-db-credentials
+                  key: db-password
+            # Subdirectorio: initdb aborta si el punto de montaje del volumen
+            # no esta vacio.
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -U $POSTGRES_USER -d $POSTGRES_DB"]
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 5
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 384Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: stay-db-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: stay-db
+  namespace: parking
+spec:
+  selector:
+    app.kubernetes.io/name: stay-db
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stay-service
+  namespace: parking
+  labels:
+    app.kubernetes.io/name: stay-service
+    app.kubernetes.io/part-of: parking
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: stay-service
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: stay-service
+        app.kubernetes.io/part-of: parking
+    spec:
+      containers:
+        - name: stay-service
+          image: parking/stay-service:demo
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: parking-platform
+          env:
+            - name: STAY_DB_HOST
+              value: stay-db
+            - name: STAY_DB_PORT
+              value: "5432"
+            - name: STAY_DB_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: stay-db-credentials
+                  key: db-name
+            - name: STAY_DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: stay-db-credentials
+                  key: db-user
+            - name: STAY_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: stay-db-credentials
+                  key: db-password
+            - name: RABBITMQ_USER
+              valueFrom:
+                secretKeyRef:
+                  name: rabbitmq-credentials
+                  key: username
+            - name: RABBITMQ_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: rabbitmq-credentials
+                  key: password
+            # Unico micro que llama a otros por HTTP: sin su propio token por
+            # client_credentials sus 4 llamadas salientes salen sin Authorization.
+            - name: STAY_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: stay-client-credentials
+                  key: client-id
+            - name: STAY_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: stay-client-credentials
+                  key: client-secret
+            # Sin esto la JVM dimensiona el heap contra la RAM del nodo, no
+            # contra el limit del contenedor, y acaba en OOMKilled.
+            - name: JAVA_TOOL_OPTIONS
+              value: -XX:MaxRAMPercentage=75.0
+          # El arranque de Spring + Flyway no cabe en un initialDelay fijo:
+          # startupProbe da hasta 3 min y solo entonces entra la liveness.
+          startupProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            periodSeconds: 5
+            failureThreshold: 36
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 200m
+              memory: 384Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: stay-service
+  namespace: parking
+spec:
+  selector:
+    app.kubernetes.io/name: stay-service
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

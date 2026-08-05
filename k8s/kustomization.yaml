@@ -1,0 +1,19 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: parking
+
+resources:
+  - 00-namespace.yaml
+  - 01-secrets.dev-only.yaml
+  - 02-platform-config.yaml
+  - 03-rabbitmq.yaml
+  - 10-vehicle.yaml
+  - 11-spot.yaml
+  - 12-tariff.yaml
+  - 13-ticket.yaml
+  - 14-stay.yaml
+
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: parking
