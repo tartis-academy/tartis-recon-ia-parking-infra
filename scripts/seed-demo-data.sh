@@ -127,16 +127,25 @@ for type in "${TYPES[@]}"; do
     ok "$type ya tiene $ya/$cupo, no se crea ninguna"
     continue
   fi
+  # curl sale con 0 ante un 4xx/5xx, asi que set -e no corta: hay que contar los
+  # 201 uno a uno para no reportar un cupo que no se ha alcanzado.
+  creadas=0
   for _ in $(seq 1 "$faltan"); do
     code=$(curl -s -X POST "$KONG_URL/api/v1/spots" \
       -H "$AUTH" \
       -H "Content-Type: application/json" \
       -d "{\"type\":\"$type\"}" \
       -o /dev/null -w "%{http_code}")
-    if [ "$code" != "201" ]; then
+    if [ "$code" = "201" ]; then
+      creadas=$((creadas + 1))
+    else
       printf '%s ' "$code"
       warn_if_auth "$code"
     fi
   done
-  ok "$type $ya -> $cupo (creadas $faltan)"
+  if [ "$creadas" -eq "$faltan" ]; then
+    ok "$type $ya -> $((ya + creadas)) (creadas $creadas)"
+  else
+    warn "$type $ya -> $((ya + creadas)) (creadas $creadas de $faltan pedidas)"
+  fi
 done
