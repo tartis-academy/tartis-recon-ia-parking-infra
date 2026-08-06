@@ -1,6 +1,19 @@
-# Lo que un orquestador aporta frente a Compose: escalado por carga y
-# reemplazo automatico de pods sin cortar el trafico. Requiere metrics-server
-# (`minikube addons enable metrics-server -p parking`).
+# NO esta en kustomization.yaml a proposito: se aplica a mano solo para la
+# demo de autoescalado.
+#
+#   kubectl apply -f k8s/20-autoscaling.yaml      # 2-5 replicas
+#   kubectl delete -f k8s/20-autoscaling.yaml     # vuelve a 1
+#   kubectl -n parking scale deployment stay-service --replicas=1
+#
+# Por que no va en el stack por defecto: el emitter SSE vive en la memoria de
+# cada replica y las colas de RabbitMQ son competing consumers, asi que cada
+# replica solo procesa una parte de los eventos y un cliente SSE conectado a
+# ella solo ve esa parte. Medido el 2026-08-06 con 10 check-ins: con 1 replica
+# llegan 10/10 stay_created y 10/10 vehicle_updated; con 2 replicas, 0/10 y
+# 5/10. Mientras stay-service no haga fanout (una cola por replica en vez de
+# una compartida), escalar horizontalmente rompe SSE-06/SSE-08.
+#
+# Requiere metrics-server (`minikube addons enable metrics-server -p parking`).
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
@@ -31,6 +44,9 @@ spec:
     scaleDown:
       stabilizationWindowSeconds: 300
 ---
+# Va con el HPA, no en el stack por defecto: con una sola replica este PDB
+# deja allowedDisruptions en 0 y bloquea cualquier drenaje de nodo para
+# siempre, porque no hay otra replica que pueda cubrir.
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:

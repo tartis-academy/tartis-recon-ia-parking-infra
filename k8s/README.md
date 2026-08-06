@@ -4,8 +4,9 @@ Despliegue del stack sobre un cluster local, en paralelo a Compose. **Compose
 sigue siendo el camino oficial de la demo**: esto no lo sustituye ni lo toca.
 
 Estado actual: el stack completo, los mismos 17 componentes que levanta
-`demo-stack.sh`, mas HPA y PodDisruptionBudget en `stay-service`. Verificado
-E2E contra el cluster el 2026-08-06 (ver [Verificacion](#verificacion)).
+`demo-stack.sh`. Verificado E2E contra el cluster el 2026-08-06 (ver
+[Verificacion](#verificacion)). El HPA existe pero se aplica aparte, ver el
+[guion de resiliencia](#guion-de-resiliencia-para-la-demo).
 
 > [!warning] Los dos stacks son excluyentes
 > `iss`, `redirect-uri` del realm y CORS de `kong.yml` estan fijados a
@@ -113,8 +114,24 @@ kubectl -n parking get pods -l app.kubernetes.io/name=stay-service -w
 El trafico sigue en 201 sin un solo fallo (el PDB garantiza que quede una
 replica sirviendo) y el pod eliminado se reemplaza solo. Medido: 25/25 en 201.
 
-**2. Autoescalado.** `checkin-traffic.sh` es secuencial y con delay: **no genera
-CPU suficiente para disparar el HPA**. Hace falta carga concurrente:
+**2. Autoescalado.** El HPA **no esta en el stack por defecto**: hay que
+aplicarlo a mano y quitarlo al terminar.
+
+```bash
+kubectl apply -f k8s/20-autoscaling.yaml     # 2-5 replicas
+# ...demo...
+kubectl delete -f k8s/20-autoscaling.yaml
+kubectl -n parking scale deployment stay-service --replicas=1
+```
+
+> [!warning] No ensenar el SSE con el HPA puesto
+> Con mas de una replica, un cliente SSE solo recibe los eventos que procesa
+> **su** replica: el emitter vive en memoria y las colas de RabbitMQ son
+> competing consumers. Medido con 10 check-ins: con 1 replica llegan 10/10
+> `stay_created` y 10/10 `vehicle_updated`; con 2 replicas, **0/10 y 5/10**.
+
+`checkin-traffic.sh` es secuencial y con delay: **no genera CPU suficiente para
+disparar el HPA**. Hace falta carga concurrente:
 
 ```bash
 TOKEN=$(curl -s -X POST http://localhost:8180/realms/parking/protocol/openid-connect/token \
@@ -175,6 +192,10 @@ lento para no cortar peticiones en curso).
 
 ## Pendiente
 
+- **`stay-service` no escala horizontalmente sin romper SSE-06/SSE-08.** El
+  arreglo esta en `stay-service`, no aqui: cada replica necesita su propia cola
+  (fanout) en vez de compartir una con competing consumers. Hasta entonces el
+  HPA se queda fuera del stack por defecto.
 - `RECON-823`: mover el `data-root` de Docker fuera de la particion raiz.
   **No antes de la demo.**
 - La ruta `/api/v1/activeStay` devuelve **500 en vez de 404** (el catch-all

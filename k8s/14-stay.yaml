@@ -100,9 +100,9 @@ metadata:
     app.kubernetes.io/name: stay-service
     app.kubernetes.io/part-of: parking
 spec:
-  # Coincide con minReplicas del HPA (20-autoscaling.yaml): sin esto cada
-  # apply la baja a 1 y el HPA la vuelve a subir.
-  replicas: 2
+  # 1 replica a proposito: con mas de una, un cliente SSE solo recibe los
+  # eventos que procesa SU replica. Ver 20-autoscaling.yaml.
+  replicas: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: stay-service
