@@ -11,10 +11,16 @@ import json
 import os
 import random
 import string
+import sys
 import time
 import unittest
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
+
+# Soporte explícito para ejecuciones vía 'python3 -m unittest discover'
+SCRIPTS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if SCRIPTS_DIR not in sys.path:
+    sys.path.insert(0, SCRIPTS_DIR)
 
 from lib.keycloak_auth import KeycloakAuthenticator, KeycloakAuthError
 
@@ -240,10 +246,17 @@ class TestCheckoutSimulationReal(unittest.TestCase):
         url = "http://localhost:9999/api/v1/stays/check-out"
         req = Request(url, data=b'{"plate":"1234ABC"}', headers={"Content-Type": "application/json"}, method="POST")
         try:
-            with urlopen(req, timeout=5):
-                self.fail("Se esperaba excepcion URLError")
-        except (URLError, Exception) as e:
+            with urlopen(req, timeout=3):
+                pass
+        except (URLError, OSError) as e:
             print(f"     [9/9] OK: Excepcion de conexion capturada correctamente ({e}).")
+            return
+        except Exception as e:
+            if not isinstance(e, AssertionError):
+                print(f"     [9/9] OK: Excepcion capturada ({e}).")
+                return
+            raise e
+        self.fail("Se esperaba error de conexion (URLError) al conectar a puerto cerrado localhost:9999")
 
 
 if __name__ == "__main__":

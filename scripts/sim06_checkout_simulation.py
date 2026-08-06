@@ -68,6 +68,27 @@ def check_kong_availability(kong_url, timeout=5):
         return False
 
 
+import subprocess
+
+def simulate_entry_time_offset(stay_id, duration_minutes):
+    """Ajusta la fecha de check_in en PostgreSQL (parking-stay-db) para ejercitar los tramos de tarifa en RN-08."""
+    if stay_id:
+        sql = f"UPDATE stays SET check_in = NOW() - INTERVAL '{duration_minutes} minutes' WHERE unique_id = '{stay_id}';"
+    else:
+        sql = f"UPDATE stays SET check_in = NOW() - INTERVAL '{duration_minutes} minutes' WHERE status = 'IN_PROGRESS' AND unique_id = (SELECT unique_id FROM stays WHERE status = 'IN_PROGRESS' ORDER BY check_in DESC LIMIT 1);"
+
+    cmd = [
+        "docker", "exec", "parking-stay-db",
+        "psql", "-U", "stay", "-d", "stay_db", "-q", "-c", sql
+    ]
+    try:
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+        return res.returncode == 0
+    except Exception as e:
+        logger.debug("No se pudo ajustar fecha de entrada en DB: %s", e)
+        return False
+
+
 def get_simulated_duration(distribution_mode):
     """Calcula una duración en minutos y etiqueta el tramo tarifario (RN-08)."""
     if distribution_mode == "mixed":
@@ -127,12 +148,15 @@ def run_checkout_simulation(authenticator, args):
         }
         
         status_in = 0
+        stay_id = None
         for attempt in range(3):
             checkin_req = Request(checkin_url, data=checkin_payload, headers=headers, method="POST")
             try:
                 with urlopen(checkin_req, timeout=10) as resp:
                     status_in = resp.getcode()
                     if status_in in (200, 201):
+                        body_in = json.loads(resp.read().decode("utf-8"))
+                        stay_id = body_in.get("stayId")
                         break
             except HTTPError as e:
                 status_in = e.code
@@ -149,6 +173,11 @@ def run_checkout_simulation(authenticator, args):
         if status_in not in (200, 201):
             fail_count += 1
             continue
+
+        # -------------------------------------------------------------
+        # PASO 1.5: APLICAR DESFASE TEMPORAL SIMULADO EN BASE DE DATOS (RN-08)
+        # -------------------------------------------------------------
+        simulate_entry_time_offset(stay_id, duration_minutes)
 
         # Simular pausa entre entrada y salida
         delay = random.uniform(args.min_delay, args.max_delay)

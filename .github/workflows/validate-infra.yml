@@ -6,7 +6,7 @@ on:
       - "docker-compose*.yml"
       - "kong/**"
       - ".env.example"
-      - "scripts/ci/**"
+      - "scripts/**"
       - ".github/workflows/validate-infra.yml"
   push:
     branches: [main]
@@ -14,7 +14,7 @@ on:
       - "docker-compose*.yml"
       - "kong/**"
       - ".env.example"
-      - "scripts/ci/**"
+      - "scripts/**"
 
 jobs:
   validate:

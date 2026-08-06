@@ -8,8 +8,10 @@ import unittest
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
-# Asegurar importación de lib.keycloak_auth
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+# Soporte explícito para ejecuciones vía 'python3 -m unittest discover'
+SCRIPTS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if SCRIPTS_DIR not in sys.path:
+    sys.path.insert(0, SCRIPTS_DIR)
 
 from lib.keycloak_auth import KeycloakAuthenticator, KeycloakAuthError
 
