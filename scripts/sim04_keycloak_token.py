@@ -1,20 +1,21 @@
 #!/usr/bin/env python3
-"""Obtención y auto-renovación de tokens JWT de Keycloak (Tarea SIM-04).
+"""Punto de entrada principal MAIN para la tarea SIM-04.
 
-Soporta:
-  - Password Grant (grant_type=password)
-  - Client Credentials Grant (grant_type=client_credentials)
-  - Obtencion directa de token por consola
-  - Simulación de peticiones continuas con auto-renovación de token ante caducidad (TTL)
+Permite:
+  1. Obtener directamente el token JWT y cabecera Authorization (--token-only).
+  2. Ejecutar la suite completa de pruebas de integración reales (--test).
+  3. Ejecutar la simulación de tráfico con auto-renovación de token (--count N).
 """
 
 import argparse
 import json
 import logging
+import os
 import random
 import string
 import sys
 import time
+import unittest
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -25,7 +26,7 @@ logging.basicConfig(
     format="[%(asctime)s] %(levelname)s: %(message)s",
     datefmt="%H:%M:%S",
 )
-logger = logging.getLogger("sim04_keycloak_token")
+logger = logging.getLogger("sim04_main")
 
 VEHICLE_TYPES = ["CAR", "CAR", "CAR", "MOTORBIKE", "CAR_PMR"]
 
@@ -180,10 +181,36 @@ def run_traffic_simulation(authenticator, args):
     return 0
 
 
+def run_integration_tests():
+    """Ejecuta la suite de pruebas de integración llamando al módulo de tests."""
+    logger.info("Ejecutando la suite completa de pruebas de integracion reales...")
+    tests_dir = os.path.join(os.path.dirname(__file__), "tests")
+    sys.path.insert(0, tests_dir)
+    try:
+        from test_keycloak_auth import TestKeycloakIntegrationReal
+        suite = unittest.TestLoader().loadTestsFromTestCase(TestKeycloakIntegrationReal)
+        runner = unittest.TextTestRunner(verbosity=2)
+        result = runner.run(suite)
+        return 0 if result.wasSuccessful() else 1
+    except Exception as e:
+        logger.error("Fallo al ejecutar las pruebas de integracion: %s", e)
+        return 1
+
+
 def main():
     parser = argparse.ArgumentParser(
-        description="SIM-04: Obtención de token de Keycloak y prueba de auto-renovación en llamadas a microservicios.",
+        description="SIM-04: Script principal MAIN para autenticación de Keycloak, pruebas y simulación.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    parser.add_argument(
+        "--test",
+        action="store_true",
+        help="Ejecutar la suite completa de pruebas de integracion reales contra Keycloak y Kong",
+    )
+    parser.add_argument(
+        "--token-only",
+        action="store_true",
+        help="Solo obtener e imprimir el token JWT / cabecera Authorization sin ejecutar trafico ni tests",
     )
     parser.add_argument(
         "--grant-type",
@@ -218,11 +245,6 @@ def main():
         "--password",
         default="Admin.123!",
         help="Password para password grant",
-    )
-    parser.add_argument(
-        "--token-only",
-        action="store_true",
-        help="Solo obtener e imprimir el token JWT / cabecera Authorization sin ejecutar trafico",
     )
     parser.add_argument(
         "--kong-url",
@@ -269,6 +291,10 @@ def main():
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
 
+    # Si se pide --test, ejecutar la suite de tests desde el MAIN
+    if args.test:
+        sys.exit(run_integration_tests())
+
     # Configurar autenticador
     try:
         authenticator = KeycloakAuthenticator(
@@ -291,7 +317,7 @@ def main():
         print(f"Authorization Header: {authenticator.get_auth_header()}")
         sys.exit(0)
 
-    # Si no se pidio --token-only, ejecutar simulación de tráfico para probar la auto-renovación
+    # Si no se pidio --token-only ni --test, ejecutar simulación de tráfico para probar la auto-renovación
     sys.exit(run_traffic_simulation(authenticator, args))
 
 
