@@ -73,10 +73,18 @@ services:
       # del claim iss. Ver KC_HOSTNAME en docker-compose.yml.
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: ${KEYCLOAK_PUBLIC_URL:-http://localhost:8180}/realms/${KEYCLOAK_REALM:-parking}
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/${KEYCLOAK_REALM:-parking}/protocol/openid-connect/certs
+      # SSE-06: vehicle-service publica vehicle-changed-v1. Sin estas dos cae al
+      # default "guest", que RabbitMQ solo admite desde localhost, y cada publish
+      # falla con ACCESS_REFUSED (el relay lo traga, asi que se ve en el log del
+      # micro pero no rompe el CRUD).
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
     depends_on:
       vehicle-db:
         condition: service_healthy
       keycloak:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q '\"status\":\"UP\"' || exit 1"]
@@ -195,10 +203,19 @@ services:
       # SecurityConfig, para que los PRs #42 y #44 no repitan el fallo al entrar.
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: ${KEYCLOAK_PUBLIC_URL:-http://localhost:8180}/realms/${KEYCLOAK_REALM:-parking}
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/${KEYCLOAK_REALM:-parking}/protocol/openid-connect/certs
+      # SSE-06: faltaban desde que tariff-service publica tariff-changed-v1.
+      # Sin ellas caia al default "guest" (ACCESS_REFUSED fuera de localhost):
+      # el evento no llegaba nunca al broker y, ademas, el indicador de salud
+      # de RabbitMQ dejaba /actuator/health en 503 -> contenedor unhealthy, que
+      # a su vez bloquea el arranque de stay-service (depends_on healthy).
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
     depends_on:
       tariff-db:
         condition: service_healthy
       keycloak:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q '\"status\":\"UP\"' || exit 1"]
