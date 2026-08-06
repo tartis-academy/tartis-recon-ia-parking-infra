@@ -16,6 +16,7 @@ resources:
   - 12-tariff.yaml
   - 13-ticket.yaml
   - 14-stay.yaml
+  - 20-autoscaling.yaml
 
 labels:
   - pairs:

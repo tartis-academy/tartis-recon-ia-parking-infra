@@ -4,8 +4,8 @@ Despliegue del stack sobre un cluster local, en paralelo a Compose. **Compose
 sigue siendo el camino oficial de la demo**: esto no lo sustituye ni lo toca.
 
 Estado actual: el stack completo, los mismos 17 componentes que levanta
-`demo-stack.sh`. Falta el bloque D (HPA, PDB, `k8s-stack.sh`) y la verificacion
-E2E con Newman.
+`demo-stack.sh`, mas HPA y PodDisruptionBudget en `stay-service`. Verificado
+E2E contra el cluster el 2026-08-06 (ver [Verificacion](#verificacion)).
 
 > [!warning] Los dos stacks son excluyentes
 > `iss`, `redirect-uri` del realm y CORS de `kong.yml` estan fijados a
@@ -20,23 +20,38 @@ E2E con Newman.
 
 ## Arranque
 
+Con Compose parado (`./demo-stack.sh down`), un solo comando:
+
+```bash
+./k8s/k8s-stack.sh up         # cluster + imagenes + manifiestos + puertos + seed
+```
+
+Tiene la misma interfaz que `demo-stack.sh` y es idempotente, asi que repetirlo
+no reinicia nada que no haya cambiado:
+
+| Comando | Que hace |
+|---|---|
+| `up [--no-seed] [--no-expose]` | Levanta todo y no devuelve el control hasta que esta Ready |
+| `down [--clean]` | Para el cluster (con `--clean`, lo borra entero) |
+| `status` | Pods, HPA y estado real de los puertos publicados |
+| `restart <deployment>` | `rollout restart` + espera |
+| `expose [--stop]` | Publica/para 8000 y 8180 en el host |
+| `verify` | Newman contra el cluster (RECON-822) |
+| `info` | Tabla de puertos y URLs + estado |
+
+A mano, si se prefiere paso a paso:
+
 ```bash
 minikube start -p parking --driver=docker --cpus=8 --memory=10g
 ./k8s/load-images.sh          # reetiqueta las imagenes de Compose y las mete en el nodo
 ./k8s/sync-config.sh          # ConfigMaps desde kong/kong.yml y keycloak/realm-export.dev-only.json
 kubectl apply -k k8s/
-kubectl get pods -n parking -w
+./k8s/expose.sh               # 8000 y 8180, bloquea hasta Ctrl-C (k8s-stack.sh los deja en segundo plano)
 ```
 
 `sync-config.sh` hay que repetirlo cada vez que cambie `kong/kong.yml` o el
-realm: son la fuente de verdad y no se copian dentro de `k8s/`.
-
-Para usarlo desde el navegador, con Compose parado:
-
-```bash
-./demo-stack.sh down
-./k8s/expose.sh               # 8000 (Kong) y 8180 (Keycloak), bloquea hasta Ctrl-C
-```
+realm: son la fuente de verdad y no se copian dentro de `k8s/`. Solo reinicia
+Kong o Keycloak si el contenido ha cambiado de verdad.
 
 Solo se exponen esos dos puertos: el shell, los 2 MFEs y los 5 microservicios
 se alcanzan a traves de Kong.
@@ -57,6 +72,66 @@ kubectl -n parking exec deploy/vehicle-service -- wget -qO- http://localhost:808
 kubectl -n parking exec deploy/vehicle-db -- psql -U vehicle -d vehicle_db -c "\dt"
 kubectl -n parking exec deploy/stay-service -- wget -qO- http://spot-service:8080/actuator/health
 ```
+
+## Verificacion
+
+```bash
+./k8s/k8s-stack.sh verify              # politica JWT de Kong: 17 assertions
+./scripts/checkin-traffic.sh           # flujo funcional: check-ins reales via Kong
+```
+
+`verify` ejecuta la coleccion **Parking · Kong JWT (GW-08)**, la misma que el
+equipo usa en Postman. Newman no lee el formato de workspace (arboles de
+`.request.yaml`), asi que `scripts/postman-export.py` la convierte a JSON v2.1
+en un temporal: el YAML sigue siendo la fuente de verdad y no hay dos copias.
+
+Resultado del 2026-08-06 contra el cluster: **16 requests, 17 assertions, 0
+fallos**, y 30/30 check-ins en 201. Sin tocar la coleccion ni el environment —
+mismos puertos que en Compose, luego el mismo environment vale para los dos.
+
+> [!note] La coleccion `Parking-E2E.postman_collection.json` no sirve para esto
+> No lleva `Authorization` en ninguna de sus 19 peticiones: es anterior a
+> GW-07/GW-08. Contra Kong da 401 en todas, en Compose igual que en Kubernetes.
+
+## Guion de resiliencia para la demo
+
+Lo que se ensena y en que orden. Requiere el stack levantado y sembrado.
+
+**1. Recuperacion automatica.** En una terminal, trafico continuo:
+
+```bash
+COUNT=25 MIN_DELAY=0 MAX_DELAY=1 ./scripts/checkin-traffic.sh
+```
+
+En otra, matar una replica a mitad de la tanda:
+
+```bash
+kubectl -n parking delete pod -l app.kubernetes.io/name=stay-service --field-selector status.phase=Running | head -1
+kubectl -n parking get pods -l app.kubernetes.io/name=stay-service -w
+```
+
+El trafico sigue en 201 sin un solo fallo (el PDB garantiza que quede una
+replica sirviendo) y el pod eliminado se reemplaza solo. Medido: 25/25 en 201.
+
+**2. Autoescalado.** `checkin-traffic.sh` es secuencial y con delay: **no genera
+CPU suficiente para disparar el HPA**. Hace falta carga concurrente:
+
+```bash
+TOKEN=$(curl -s -X POST http://localhost:8180/realms/parking/protocol/openid-connect/token \
+  -d client_id=parking-frontend -d username=admin.test -d 'password=Admin.123!' \
+  -d grant_type=password | python3 -c 'import sys,json;print(json.load(sys.stdin)["access_token"])')
+for i in $(seq 1 6); do
+  ( end=$((SECONDS+150)); while [ $SECONDS -lt $end ]; do
+      curl -s -o /dev/null -H "Authorization: Bearer $TOKEN" \
+        "http://localhost:8000/api/v1/stays?page=0&size=50"; done ) &
+done
+watch -n5 'kubectl -n parking get hpa stay-service'
+```
+
+Tarda ~3 min en escalar: metrics-server publica cada 15s, el HPA decide cada
+15s y `scaleUp.stabilizationWindowSeconds` son 30s. Medido: 2 -> 5 replicas con
+CPU al 146 %. Baja sola a 2 tras 5 min sin carga (`scaleDown`, deliberadamente
+lento para no cortar peticiones en curso).
 
 ## Decisiones
 
@@ -82,16 +157,27 @@ kubectl -n parking exec deploy/stay-service -- wget -qO- http://spot-service:808
   `httpGet` lo ejecuta el kubelet desde fuera del contenedor.
 
 - `expose.sh` usa `kubectl port-forward`, que es un proceso que puede caerse a
-  mitad de demo. Alternativa mas robusta si se recrea el cluster: publicar los
-  puertos en el propio nodo con `minikube start --ports=8000:30800,8180:30818`
-  y NodePort, que no necesita ningun proceso vivo.
+  mitad de demo. Ademas se enlaza a un **pod concreto**: si ese pod se
+  reemplaza (rollout, HPA), el proceso sigue vivo pero el puerto deja de
+  responder, asi que `k8s-stack.sh` comprueba salud real y no solo el PID.
+  Alternativa mas robusta si se recrea el cluster: publicar los puertos en el
+  propio nodo con `minikube start --ports=8000:30800,8180:30818` y NodePort,
+  que no necesita ningun proceso vivo.
+- `initContainer` en los 5 micros (`pg_isready` contra su Postgres) y en el
+  shell (`nc -z kong 8000`): sin ellos, tras un `minikube stop`/`start` los
+  micros arrancan antes que su BD y se reinician en cascada, y nginx —que
+  resuelve el upstream una sola vez al arrancar— muere en `CrashLoopBackOff`.
+  En Compose lo evita `depends_on`. Usan la imagen de Postgres, que ya esta en
+  el nodo, para no depender de la red.
+- HPA con `scaleUp.stabilizationWindowSeconds: 30`: con un arranque de Spring de
+  ~40s, el valor por defecto (0s) hace que el HPA no vea todavia el efecto de la
+  replica anterior y sobreescale.
 
 ## Pendiente
 
-- Bloque D: HPA en stay-service, PodDisruptionBudget, `k8s-stack.sh` y guion de
-  la demo.
-- Verificacion E2E con Newman contra el cluster (RECON-822), que es la que
-  decide si Kubernetes se usa en la demo. Requiere parar Compose.
-- Tras un `minikube stop`/`start` los microservicios se reinician una vez porque
-  su Postgres todavia no acepta conexiones. Se recuperan solos; si molesta en la
-  demo, la solucion es un `initContainer` que espere a la BD.
+- `RECON-823`: mover el `data-root` de Docker fuera de la particion raiz.
+  **No antes de la demo.**
+- La ruta `/api/v1/activeStay` devuelve **500 en vez de 404** (el catch-all
+  IN-36 de `stay-service` traga la `NoResourceFoundException`). No es de
+  Kubernetes: se reproduce igual contra el micro sin pasar por Kong, y por
+  tanto tambien en Compose. Es de `stay-service`, no de esta epica.

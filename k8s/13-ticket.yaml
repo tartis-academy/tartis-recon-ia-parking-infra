@@ -110,6 +110,20 @@ spec:
         app.kubernetes.io/name: ticket-service
         app.kubernetes.io/part-of: parking
     spec:
+      # Sin esto, tras un minikube stop/start el micro arranca antes que su
+      # Postgres, Flyway falla y el pod se reinicia en cascada.
+      initContainers:
+        - name: wait-for-db
+          image: postgres:15.18-alpine
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-c", "until pg_isready -h ticket-db -p 5432 -q; do sleep 2; done"]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
       containers:
         - name: ticket-service
           image: parking/ticket-service:demo

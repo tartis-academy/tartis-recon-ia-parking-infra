@@ -100,7 +100,9 @@ metadata:
     app.kubernetes.io/name: stay-service
     app.kubernetes.io/part-of: parking
 spec:
-  replicas: 1
+  # Coincide con minReplicas del HPA (20-autoscaling.yaml): sin esto cada
+  # apply la baja a 1 y el HPA la vuelve a subir.
+  replicas: 2
   selector:
     matchLabels:
       app.kubernetes.io/name: stay-service
@@ -110,6 +112,20 @@ spec:
         app.kubernetes.io/name: stay-service
         app.kubernetes.io/part-of: parking
     spec:
+      # Sin esto, tras un minikube stop/start el micro arranca antes que su
+      # Postgres, Flyway falla y el pod se reinicia en cascada.
+      initContainers:
+        - name: wait-for-db
+          image: postgres:15.18-alpine
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-c", "until pg_isready -h stay-db -p 5432 -q; do sleep 2; done"]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
       containers:
         - name: stay-service
           image: parking/stay-service:demo
