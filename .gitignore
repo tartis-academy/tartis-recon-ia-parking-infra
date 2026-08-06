@@ -14,3 +14,9 @@ $RECYCLE.BIN/
 
 ### === graphify ===
 graphify-out/
+
+### === python ===
+__pycache__/
+*.pyc
+.pytest_cache/
+
