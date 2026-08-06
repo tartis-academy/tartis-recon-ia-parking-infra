@@ -22,34 +22,6 @@ El sistema automatiza el control de acceso, la asignación atómica de plazas, e
 - **Cancelación Manual de Estancia (CB06 / RN-02):** Permite a administradores cancelar estancias de vehículos que dan marcha atrás antes de cruzar la barrera, pasando la estancia a estado terminal `CANCELLED` (**IN-19**) y liberando la plaza reservada.
 - **Gestión de Excepciones e Incidencias:** Marcado de tickets perdidos (**IN-22**), bloqueo de plazas por mantenimiento (**RN-10**), gestión de bajas/altas lógicas de vehículos (**RN-11**) y resiliencia con colas de mensajes muertos (DLQ) y cortocircuitos Resilience4j.
 
----
-
-## Componentes del Ecosistema
-
-```text
-                                +-----------------------------------+
-                                |    Frontend App (React + Vite)    |
-                                +-----------------------------------+
-                                                  |
-                                                  v
-+------------------------+      +-----------------------------------+
-|  Keycloak (OIDC / IdP) | <==> |     API Gateway (Kong DB-less)    |
-+------------------------+      +-----------------------------------+
-                                                  |
-       +-------------------+----------------------+-------------------+-------------------+
-       |                   |                      |                   |                   |
-       v                   v                      v                   v                   v
-+--------------+    +--------------+      +--------------+    +--------------+    +--------------+
-| vehicle-svc  |    |  spot-svc    |      |  tariff-svc  |    |  ticket-svc  |    |   stay-svc   |
-| (Port 8081)  |    | (Port 8082)  |      | (Port 8083)  |    | (Port 8084)  |    | (Port 8085)  |
-+--------------+    +--------------+      +--------------+    +--------------+    +--------------+
-       |                   ^                      |                   ^                   | (publica)
-       |                   |                      |                   |                   v
-       |                   +============== [ RABBITMQ ] ==============+<==================+
-       |                               (Exchange: stay.events)
-       v                   v                      v                   v                   v
-[( vehicle_db )]    [(  spot_db  )]        [( tariff_db )]     [( ticket_db )]     [(  stay_db  )]
-```
 
 ### 1. Frontend (Aplicación Web & Kiosk)
 Aplicación SPA desarrollada en **React 18**, **TypeScript**, **Vite** y **Tailwind CSS**.
@@ -192,6 +164,51 @@ docker compose -f docker-compose.yml -f docker-compose.demo.yml up -d --build  #
 docker compose ps                                                              # comprobar healthy
 docker compose down                                                            # para (-v también borra datos)
 ```
+
+## Qué script uso
+
+Tres scripts, cada uno pensado para un caso distinto — la confusión más
+habitual es pensar que "dev" en `docker-compose.dev.yml` tiene algo que ver
+con qué tan completo es el stack. No es así: es solo qué Postgres usan los
+microservicios (compartido vs. dedicado), no si se levanta la plataforma
+entera ni si hay 1 contenedor o 16.
+
+| Script | Ficheros compose | Qué levanta | Selección de servicios | Cuándo usarlo |
+|---|---|---|---|---|
+| `./dev-db.sh` | `docker-compose.dev.yml` | Solo el Postgres compartido de dev (schema por servicio), sin pgAdmin | Todo o nada | Programar contra la BD sin tocar Docker a mano; además sincroniza el `.env` de cada microservicio |
+| `./setup.sh` (sin flags) | `docker-compose.yml` + `docker-compose.dev.yml` | Plataforma (Keycloak/Kong/RabbitMQ) + Postgres dev + pgAdmin | Todo o nada | Día a día: cada micro corriendo en tu IDE con perfil `dev`, contra el Postgres compartido |
+| `./setup.sh -f` | `docker-compose.yml` + `docker-compose.demo.yml` | Plataforma + los 5 microservicios + frontend, perfil `prod`, Postgres dedicado por servicio | `-s vehicle,spot` levanta solo ese subconjunto (+ sus dependencias) | Levantar rápido el stack completo, o solo una parte, sin esperar healthchecks |
+| `./demo-stack.sh` | `docker-compose.yml` + `docker-compose.demo.yml` (**mismo stack que `setup.sh -f`, nunca toca `docker-compose.dev.yml`**) | Lo mismo que `setup.sh -f`: plataforma + 5 micros + mfe-entryexit + frontend | Sin `-s`. Solo `up --no-frontend`, o `restart <servicio>` para rehacer uno ya levantado | Cuando necesitas confirmar que TODO llegó a `healthy` antes de seguir (demos, scripts encadenados); `status`/`info` para ver puertos y estado sin levantar nada |
+
+En corto: si quieres elegir qué microservicios arrancan, es `setup.sh -f -s
+...`, `demo-stack.sh` no tiene esa opción. Si quieres la garantía de que todo
+terminó `healthy` (o saber puertos/estado de un vistazo), es `demo-stack.sh`.
+`dev-db.sh` y `setup.sh` (sin `-f`) son el único par que toca
+`docker-compose.dev.yml`; todo lo demás usa `docker-compose.demo.yml`.
+
+Si lo único que quieres es programar contra la BD compartida, `./dev-db.sh`
+levanta el Postgres (sin pgAdmin), asegura los cinco schemas y
+**escribe las credenciales en el `.env` de cada microservicio**, que es lo que
+leen sus `application-dev.properties`. Después de esto los servicios arrancan
+sin tocar ningún fichero de configuración.
+
+```bash
+./dev-db.sh             # levanta el Postgres y sincroniza los .env
+./dev-db.sh sync        # solo reescribe los .env (tras cambiar el .env de infra)
+./dev-db.sh down        # para el Postgres
+./dev-db.sh clean       # para el Postgres y BORRA sus datos
+```
+
+Busca los repos de los cinco servicios como hermanos de este. Si los tienes en
+otro sitio: `PARKING_ROOT=/ruta/a/los/repos ./dev-db.sh`.
+
+En el `.env` de cada servicio solo toca su propio bloque (entre los marcadores
+`tartis dev-db`); lo demás, como las `VEHICLE_DB_*` del Postgres dedicado, se
+queda como esté. Es idempotente: relanzarlo no rompe nada.
+
+También avisa si el Postgres ya existente no acepta el usuario o la contraseña
+del `.env`: eso pasa cuando se cambian con el volumen de datos ya creado, y la
+única forma de aplicarlas es recrearlo (`./dev-db.sh clean && ./dev-db.sh`).
 
 ## Datos de conexión
 
