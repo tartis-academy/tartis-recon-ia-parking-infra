@@ -292,6 +292,35 @@ Las excepciones (hoy solo la futura ruta SSE) están declaradas como constantes
 al principio del script, con su justificación. Ampliar ese set requiere tocar el
 fichero y que se vea en la review.
 
+### Autenticación Keycloak y Generación de Tráfico en Python (SIM-04)
+
+Para scripts de automatización y pruebas de larga duración, se incluye un módulo Python nativo que gestiona la obtención y **renovación automática del token JWT** de Keycloak antes de que expire:
+
+- **[`scripts/lib/keycloak_auth.py`](scripts/lib/keycloak_auth.py)**: Módulo reutilizable (`KeycloakAuthenticator`) que soporta **Password Grant** (`grant_type=password`) y **Client Credentials Grant** (`grant_type=client_credentials`), calculando dinámicamente el tiempo de refresco (`expires_in` menos margen de seguridad).
+- **[`scripts/sim04_keycloak_token.py`](scripts/sim04_keycloak_token.py)**: Script ejecutable que permite obtener directamente el token JWT (`--token-only`) o simular tráfico continuo comprobando la auto-renovación sin producir errores `401 Unauthorized`.
+- **[`scripts/tests/test_keycloak_auth.py`](scripts/tests/test_keycloak_auth.py)**: Suite de pruebas de integración REALES contra la instancia de Keycloak activa (`http://localhost:8180`) sin mocks.
+
+```bash
+# Ejecutar suite de pruebas reales contra Keycloak activo (sin mocks)
+python3 scripts/tests/test_keycloak_auth.py
+
+# Obtener únicamente el token y cabecera Bearer por consola
+python3 scripts/sim04_keycloak_token.py --token-only
+
+# Simulación de tráfico con Password Grant (default)
+python3 scripts/sim04_keycloak_token.py --count 10 --min-delay 1 --max-delay 2
+
+# Simulación con Client Credentials Grant
+python3 scripts/sim04_keycloak_token.py --grant-type client_credentials \
+  --client-id parking-stay-service \
+  --client-secret stay-service-dev-secret-no-usar-fuera-de-local \
+  --count 5
+```
+
+
+
+
+
 ## RabbitMQ
 
 Imagen `rabbitmq:4-management` en vez del `3-management` de la ficha
