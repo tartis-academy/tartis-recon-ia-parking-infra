@@ -370,3 +370,27 @@ en solitario, usa `./setup.sh -f` o combina los dos ficheros a mano.
 
 Cambias el `.env` y no se entera → `docker compose up -d --force-recreate`
 (si tocas usuario o contraseña de Postgres, además `docker compose down -v`).
+
+## Script SIM-06: Simulación de Check-Out y Tramos de Tarifa (RN-08)
+
+El script `scripts/sim06_checkout_simulation.py` actúa como **punto de entrada principal MAIN** para la simulación de salidas de vehículos (`POST /api/v1/stays/check-out`), ejercitando la regla de negocio **RN-08** y activando los tres tramos tarifarios (**Minuto**, **Hora** y **Día**).
+
+### Comandos de uso:
+
+```bash
+# 1. Obtener directamente el token JWT y la cabecera Authorization
+python3 scripts/sim06_checkout_simulation.py --token-only
+
+# 2. Lanzar la suite completa de pruebas de integración reales de Check-Out (9/9 tests)
+python3 scripts/sim06_checkout_simulation.py --test
+
+# 3. Simular tráfico completo (Check-In -> Check-Out) ejercitando los tramos de tarifa
+python3 scripts/sim06_checkout_simulation.py --count 10 --distribution mixed
+
+# 4. Simulación con Client Credentials Grant (Service Account)
+python3 scripts/sim06_checkout_simulation.py --count 5 \
+  --grant-type client_credentials \
+  --client-id parking-stay-service \
+  --client-secret stay-service-dev-secret-no-usar-fuera-de-local
+```
+
