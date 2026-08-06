@@ -1,0 +1,24 @@
+$kind: collection
+description: |
+  Demuestra en caliente la politica de seguridad de GW-03/GW-08: **todas** las
+  rutas de `kong.yml` exigen JWT, salvo la excepcion documentada de SSE
+  (SSE-08, todavia no implementada). `scripts/ci/validate_kong.py` (GW-08) ya
+  comprueba esto de forma estatica contra el YAML en cada PR; esta coleccion
+  comprueba lo mismo en caliente, contra el Kong real en `:8000`.
+
+  Requiere el stack completo levantado (`./setup.sh -f` desde la raiz de este
+  repo) y el environment **Parking - Kong (dev)** seleccionado.
+
+  Ejecutar de arriba a abajo (o con el Collection Runner):
+
+  1. **0. Auth** — pide un token real a Keycloak (usuario `admin.test`) y lo
+     guarda en la variable de environment `accessToken`.
+  2. **1. Sin token** — las 7 rutas de `kong.yml`, sin cabecera
+     `Authorization`. Todas deben dar **401**. Si alguna no lo da, es una ruta
+     que se quedo sin el plugin `jwt` — justo lo que GW-03 pedia revisar ruta
+     por ruta, y lo que GW-08 bloquea en CI.
+  3. **2. Con token** — las mismas 7 rutas, con `Bearer {{accessToken}}`.
+     Ninguna debe dar 401 (pueden dar 200/404/lo que sea segun la app — eso ya
+     no es cosa de Kong).
+  4. **3. Token invalido** — una ruta con un JWT de firma basura. Debe dar
+     401 igual que sin token: Kong lo rechaza sin reenviarlo al micro.

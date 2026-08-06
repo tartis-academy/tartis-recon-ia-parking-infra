@@ -1,0 +1,16 @@
+$kind: http-request
+description: |-
+  El contrato prevee que `PATCH /{id}/status` lea `active` del body para activar o desactivar. Hoy el body **se ignora** y siempre desactiva.
+
+  Punto 4 de [[Tareas por hacer en orden de importancia]].
+url: "{{baseUrlVehicle}}/v1/vehicles/{{vehicleId}}/status"
+method: PATCH
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "active": true
+    }
+order: 2000

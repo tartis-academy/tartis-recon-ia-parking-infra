@@ -1,0 +1,3 @@
+$kind: collection
+description: Rutas o comportamientos que estan en el openapi.yml pero NO en el controlador. Sirven de checklist contrato-vs-implementacion.
+order: 1000

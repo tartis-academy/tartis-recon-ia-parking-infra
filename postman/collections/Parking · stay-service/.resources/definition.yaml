@@ -1,0 +1,25 @@
+$kind: collection
+description: |
+  stay-service — verificado el 2026-07-23.
+
+  > **Que rama necesitas:** `POST /v1/stays/check-in` ya esta mergeado en **`release`**
+  > y **`release123`** (PR #27, HU-01). En `main` `StayRestAdapter` sigue vacio, asi que
+  > ahi todas estas requests dan 404. Levanta stay desde `release` o `release123`.
+
+  El check-in es sincrono y orquesta, en orden: `vehicle` (resolver o dar de alta la
+  matricula, `GET /v1/vehicles/plate/{plate}` + `POST /v1/vehicles`, RN-11) -> `spot`
+  (ocupar plaza, RN-01) -> `tariff` (tarifa activa del tipo de vehiculo) -> persistencia
+  de la estancia. Si algo falla tras ocupar la plaza, se libera (compensacion). La
+  emision del `ticket` de entrada sigue pendiente, por eso `entryTicket` llega a null.
+
+  Codigos de la respuesta (`CustomizedExceptionAdapter`, IN-36):
+
+  | Codigo | Caso | Barrera |
+  |---|---|---|
+  | 201 | Acceso autorizado, plaza asignada (CA3) | se abre |
+  | 400 | Matricula vacia o `vehicleType` no reconocido | cerrada |
+  | 409 | Parking completo (RN-01/CA-01) **o** vehiculo ya dentro (IN-02/CB-05) | cerrada |
+  | 422 | Vehiculo dado de baja (RN-11) | cerrada |
+
+  El cuerpo de error es el `ErrorResponse` comun:
+  `{timestamp, status, error, message, path}`.

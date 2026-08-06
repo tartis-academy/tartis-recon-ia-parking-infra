@@ -1,0 +1,51 @@
+# BD compartida de dev (schema por servicio) + pgAdmin. Solo para local, no
+# lo usa el stack de demo (docker-compose.demo.yml).
+
+services:
+  postgres-dev:
+    image: postgres:15.18-alpine
+    container_name: parking-dev-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - parking-dev-postgres-data:/var/lib/postgresql/data
+      - ./init-dev-schemas.sql:/docker-entrypoint-initdb.d/init-schemas.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - parking-shared
+
+  pgadmin:
+    image: dpage/pgadmin4:9.16
+    container_name: parking-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
+    ports:
+      - "${PGADMIN_PORT:-5050}:80"
+    volumes:
+      - parking-pgadmin-data:/var/lib/pgadmin
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:80/misc/ping || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - parking-shared
+
+volumes:
+  parking-dev-postgres-data:
+  parking-pgadmin-data:
+
+networks:
+  parking-shared:
+    external: true

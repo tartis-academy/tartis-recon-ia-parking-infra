@@ -1,77 +1,136 @@
-# Herramientas y BD COMPARTIDAS entre microservicios (pgAdmin, SonarQube,
-# Postgres de dev con un schema por servicio). Detalle: Obsidian Tartis-Recon-IA.
+# Plataforma nucleo de Fase II (Keycloak, Kong, RabbitMQ). BD de dev y
+# pgAdmin viven en docker-compose.dev.yml. Detalle: Obsidian Tartis-Recon-IA.
 #
 # La red parking-shared es externa, crearla una vez:
 #   docker network create parking-shared
+#
+# ./setup.sh          plataforma + BD de dev + pgAdmin
+# ./setup.sh -f       plataforma + los 5 microservicios + frontend
 
 services:
-  postgres-dev:
+  keycloak-db:
     image: postgres:15.18-alpine
-    container_name: parking-dev-postgres
+    container_name: parking-keycloak-db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${DB_USER}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${KEYCLOAK_DB_USER:?falta KEYCLOAK_DB_USER en .env}
+      POSTGRES_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?falta KEYCLOAK_DB_PASSWORD en .env}
+      POSTGRES_DB: ${KEYCLOAK_DB_NAME:-keycloak}
     ports:
-      - "${DB_PORT:-5432}:5432"
+      - "${KEYCLOAK_DB_PORT:-5438}:5432"
     volumes:
-      - parking-dev-postgres-data:/var/lib/postgresql/data
-      - ./init-dev-schemas.sql:/docker-entrypoint-initdb.d/init-schemas.sql:ro
+      - parking-keycloak-db-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      test: ["CMD-SHELL", "pg_isready -U ${KEYCLOAK_DB_USER:?falta KEYCLOAK_DB_USER en .env} -d ${KEYCLOAK_DB_NAME:-keycloak}"]
       interval: 5s
       timeout: 3s
       retries: 5
     networks:
       - parking-shared
 
-  pgadmin:
-    image: dpage/pgadmin4:9.16
-    container_name: parking-pgadmin
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.7.0
+    container_name: parking-keycloak
     restart: unless-stopped
+    command: start-dev --import-realm
     environment:
-      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL}
-      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
+      KC_DB: postgres
+      KC_DB_URL_HOST: keycloak-db
+      KC_DB_URL_DATABASE: ${KEYCLOAK_DB_NAME:-keycloak}
+      KC_DB_USERNAME: ${KEYCLOAK_DB_USER:?falta KEYCLOAK_DB_USER en .env}
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?falta KEYCLOAK_DB_PASSWORD en .env}
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USER:?falta KEYCLOAK_ADMIN_USER en .env}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?falta KEYCLOAK_ADMIN_PASSWORD en .env}
+      KC_HEALTH_ENABLED: "true"
+      # El `iss` de los tokens tiene que ser ESTABLE. Sin KC_HOSTNAME, start-dev
+      # lo deriva del Host de la peticion: entrando por localhost:8180 sale
+      # "http://localhost:8180/realms/parking" y entrando por keycloak:8080 sale
+      # otro distinto. Kong casa el token contra el consumer cuya `key` es
+      # exactamente ese iss (kong/kong.yml), asi que un iss variable son 401
+      # intermitentes segun por donde se haya pedido el token.
+      KC_HOSTNAME: ${KEYCLOAK_PUBLIC_URL:-http://localhost:8180}
+      # Con KC_HOSTNAME fijo, las URLs de servidor a servidor (JWKS, token)
+      # tambien apuntarian a localhost:8180, que dentro de un contenedor no
+      # resuelve. Esto deja que las llamadas backchannel usen el host real de
+      # la peticion (keycloak:8080) sin mover el iss, que sigue siendo el
+      # publico. Es lo que permite a los micros validar firma por la red
+      # interna y seguir esperando el iss publico.
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
     ports:
-      - "${PGADMIN_PORT:-5050}:80"
+      - "${KEYCLOAK_PORT:-8180}:8080"
     volumes:
-      - parking-pgadmin-data:/var/lib/pgadmin
+      - ./keycloak/realm-export.dev-only.json:/opt/keycloak/data/import/realm-export.json:ro
+    depends_on:
+      keycloak-db:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:80/misc/ping || exit 1"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
+      # imagen distroless sin curl/wget: golpea el puerto de management (9000) via /dev/tcp
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 && grep -q '200 OK' <&3"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 45s
     networks:
       - parking-shared
 
-  sonarqube:
-    image: sonarqube:community
-    container_name: parking-sonarqube
+  # rabbitmq:3-management esta EOL; se usa la serie 4 (misma API AMQP y UI)
+  rabbitmq:
+    image: rabbitmq:4-management
+    container_name: parking-rabbitmq
     restart: unless-stopped
     environment:
-      SONAR_ES_BOOTSTRAP_CHECKS_DISABLE: "true"
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:?falta RABBITMQ_USER en .env}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?falta RABBITMQ_PASSWORD en .env}
     ports:
-      - "${SONARQUBE_PORT:-9000}:9000"
+      - "${RABBITMQ_AMQP_PORT:-5672}:5672"
+      - "${RABBITMQ_MGMT_PORT:-15672}:15672"
     volumes:
-      - parking-sonarqube-data:/opt/sonarqube/data
-      - parking-sonarqube-logs:/opt/sonarqube/logs
-      - parking-sonarqube-extensions:/opt/sonarqube/extensions
+      - parking-rabbitmq-data:/var/lib/rabbitmq
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:9000/api/system/status | grep -q '\"status\":\"UP\"' || exit 1"]
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_running"]
       interval: 10s
       timeout: 5s
       retries: 10
-      start_period: 120s
+      start_period: 30s
+    networks:
+      - parking-shared
+
+  kong:
+    image: kong:3.9
+    container_name: parking-kong
+    restart: unless-stopped
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /kong/declarative/kong.yml
+      # El formato por defecto registra $request, que incluye la query string y
+      # por tanto el ?access_token= de la ruta SSE. $uri es la ruta sin query.
+      # Este log es un stream aparte del plugin file-log: la redaccion de
+      # custom_fields_by_lua no lo alcanza (SSE-08).
+      # Los $$ son escape de Compose, no de nginx: con un solo $ Compose los
+      # interpolaria como variables suyas y llegarian vacios.
+      KONG_NGINX_HTTP_LOG_FORMAT: 'sin_query_string "$$remote_addr - $$remote_user [$$time_local] \"$$request_method $$uri $$server_protocol\" $$status $$body_bytes_sent \"$$http_referer\" \"$$http_user_agent\" kong_request_id: \"$$kong_request_id\""'
+      KONG_PROXY_ACCESS_LOG: /dev/stdout sin_query_string
+      KONG_ADMIN_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_LISTEN: 0.0.0.0:8001
+    ports:
+      - "${KONG_PROXY_PORT:-8000}:8000"
+      - "127.0.0.1:${KONG_ADMIN_PORT:-8001}:8001"
+    volumes:
+      - ./kong/kong.yml:/kong/declarative/kong.yml:ro
+    healthcheck:
+      test: ["CMD", "kong", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
     networks:
       - parking-shared
 
 volumes:
-  parking-dev-postgres-data:
-  parking-pgadmin-data:
-  parking-sonarqube-data:
-  parking-sonarqube-logs:
-  parking-sonarqube-extensions:
+  parking-keycloak-db-data:
+  parking-rabbitmq-data:
 
 networks:
   parking-shared:

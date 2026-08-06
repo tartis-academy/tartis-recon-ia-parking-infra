@@ -1,0 +1,17 @@
+$kind: collection
+description: |
+  Flujo de entrada al parking, de principio a fin.
+
+  Tiene dos carpetas que hacen **lo mismo por dos caminos distintos**:
+
+  1. **Simulacion manual** — encadena a mano las llamadas a vehicle, tariff, spot y
+     ticket. Funciona hoy. **No es una prueba del sistema**: nadie orquesta nada, lo
+     orquesta Postman. Es un sustituto temporal, dicho en voz alta.
+  2. **Check-in real** — una sola llamada a `POST /v1/stays/check-in`. Es la que
+     cuenta. Requiere stay levantado desde `feature/checkin-usecase` y arrastra los
+     bugs listados en el README.
+
+  El dia que el check-in real funcione E2E, la carpeta 1 se borra.
+
+  Ejecutalas en orden con el Collection Runner y el environment
+  'Parking - Local (dev)' seleccionado.

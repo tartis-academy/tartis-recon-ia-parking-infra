@@ -1,0 +1,8 @@
+$kind: http-request
+description: |-
+  GET /v1/entry-tickets/{id}/code. `return null` -> 200 vacio.
+
+  La ruta no coincide con el openapi.yml, que declara `GET /v1/tickets/{id}`. Divergencia a resolver.
+url: "{{baseUrlTicket}}/v1/entry-tickets/{{entryTicketId}}/code"
+method: GET
+order: 3000

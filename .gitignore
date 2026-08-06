@@ -1,5 +1,6 @@
 .env
 .env.local
+.env.demo
 
 docker-compose.override.yml
 
@@ -10,3 +11,12 @@ $RECYCLE.BIN/
 
 .idea/
 .vscode/*
+
+### === graphify ===
+graphify-out/
+
+### === python ===
+__pycache__/
+*.pyc
+.pytest_cache/
+

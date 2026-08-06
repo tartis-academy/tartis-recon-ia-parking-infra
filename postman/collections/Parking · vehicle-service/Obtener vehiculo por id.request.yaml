@@ -1,0 +1,14 @@
+$kind: http-request
+description: |-
+  GET /v1/vehicles/{id} -> 200, o 404 si no existe (`VehicleNotFoundException`).
+
+  Usa `vehicleId` de 'Crear vehiculo'.
+url: "{{baseUrlVehicle}}/v1/vehicles/{{vehicleId}}"
+method: GET
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200 OK', () => pm.response.to.have.status(200));
+      pm.test('el id coincide', () => pm.expect(pm.response.json().uniqueId).to.eql(pm.environment.get('vehicleId')));
+    language: text/javascript
+order: 4000

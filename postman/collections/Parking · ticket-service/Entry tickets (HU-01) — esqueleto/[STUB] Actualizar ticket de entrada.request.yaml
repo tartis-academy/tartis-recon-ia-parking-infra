@@ -1,0 +1,13 @@
+$kind: http-request
+description: PUT /v1/entry-tickets/{id}. `return null` -> 200 vacio.
+url: "{{baseUrlTicket}}/v1/entry-tickets/{{entryTicketId}}"
+method: PUT
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "stayId": "{{stayId}}"
+    }
+order: 4000

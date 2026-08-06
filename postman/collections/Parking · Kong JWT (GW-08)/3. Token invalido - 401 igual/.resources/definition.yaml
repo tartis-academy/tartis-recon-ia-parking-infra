@@ -1,0 +1,6 @@
+$kind: collection
+description: |-
+  Un JWT con firma basura (no simplemente ausente). Debe dar 401 igual que sin
+  cabecera: Kong valida firma/claims antes de reenviar nada, no solo comprueba
+  que la cabecera exista.
+order: 4000

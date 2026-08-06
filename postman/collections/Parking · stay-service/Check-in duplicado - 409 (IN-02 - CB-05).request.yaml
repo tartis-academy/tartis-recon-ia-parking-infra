@@ -1,0 +1,29 @@
+$kind: http-request
+name: Check-in duplicado -> 409 (IN-02 / CB-05)
+description: |-
+  Repetir el check-in de una matricula que ya esta dentro.
+
+  Espera **409 Conflict** (`DuplicateActiveStayException`). Ejecutala justo despues de un check-in correcto, con la misma `plate`.
+url: "{{baseUrlStay}}/v1/stays/check-in"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "plate": "{{plate}}",
+      "vehicleType": "{{vehicleType}}"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('409 Conflict', () => pm.response.to.have.status(409));
+      const body = pm.response.json();
+      pm.test('cuerpo ErrorResponse', () => {
+        pm.expect(body).to.have.property('timestamp');
+        pm.expect(body).to.have.property('path');
+        pm.expect(body.status).to.eql(409);
+      });
+    language: text/javascript
+order: 3000

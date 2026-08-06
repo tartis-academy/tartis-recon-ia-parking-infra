@@ -1,0 +1,11 @@
+$kind: http-request
+description: Comprobacion rapida de que el servicio esta arriba. `management.endpoints.web.exposure.include=health` (comun a los 5).
+url: "{{baseUrlStay}}/actuator/health"
+method: GET
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200 OK', () => pm.response.to.have.status(200));
+      pm.test('UP', () => pm.expect(pm.response.json().status).to.eql('UP'));
+    language: text/javascript
+order: 7000

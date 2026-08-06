@@ -1,0 +1,26 @@
+$kind: http-request
+description: "PUT /v1/vehicles/{id} -> 200. Mismo body que el POST: `type`, `plate` y `active` obligatorios."
+url: "{{baseUrlVehicle}}/v1/vehicles/{{vehicleId}}"
+method: PUT
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "type": "{{vehicleType}}",
+      "plate": "{{plate}}",
+      "brand": "Seat",
+      "model": "Leon FR",
+      "color": "Negro",
+      "numDoors": 5,
+      "hasSidecar": false,
+      "active": true
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200 OK', () => pm.response.to.have.status(200));
+      pm.test('modelo actualizado', () => pm.expect(pm.response.json().model).to.eql('Leon FR'));
+    language: text/javascript
+order: 6000

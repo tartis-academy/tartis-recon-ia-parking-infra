@@ -1,0 +1,443 @@
+# Stack de DEMO: los 5 microservicios (perfil prod, database-per-service real)
+# + el frontend, cada uno con su propia Postgres. Asume los 6 repos clonados
+# como hermanos en el mismo directorio padre (convencion del proyecto).
+#
+# Depende de keycloak y rabbitmq (definidos en docker-compose.yml), asi que
+# se lanza siempre combinado con ese fichero:
+#   cp .env.example .env
+#   docker network create parking-shared   # si no existe ya
+#   docker compose -f docker-compose.yml -f docker-compose.demo.yml up --build
+# (./setup.sh full hace esto).
+#
+# RECON-812: cada servicio versiona su esquema con Flyway (V1__init.sql en
+# src/main/resources/db/migration) y lo aplica el solo al arrancar contra su
+# Postgres dedicada, en vez de depender de un schema.sql montado como init
+# script. baseline-on-migrate=true evita romper las BD de demo que ya tenian
+# las tablas creadas por el schema.sql anterior.
+#
+# GW-07: los 5 microservicios ya no publican puerto de host (sin `ports:`).
+# Solo son alcanzables entre contenedores de la red `parking-shared` (Kong,
+# el resto de servicios) o via Kong en :8000 (rutas /api/v1/...). El
+# environment de Postman "Parking - Local (dev)" que pegaba directo a
+# localhost:8080-8084 queda obsoleto por este cambio; la coleccion de
+# verificacion de GW-08 pega contra Kong.
+
+services:
+
+  vehicle-db:
+    image: postgres:15.18-alpine
+    container_name: parking-vehicle-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${VEHICLE_DB_USER}
+      POSTGRES_PASSWORD: ${VEHICLE_DB_PASSWORD}
+      POSTGRES_DB: ${VEHICLE_DB_NAME}
+    ports:
+      - "${VEHICLE_DB_PORT:-5433}:5432"
+    volumes:
+      - parking-vehicle-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${VEHICLE_DB_USER} -d ${VEHICLE_DB_NAME}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - parking-shared
+
+  vehicle-service:
+    build:
+      context: ../tartis-recon-ai-parking-vehicleService/backend/vehicle-service
+    container_name: parking-vehicle-service
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      VEHICLE_DB_HOST: vehicle-db
+      VEHICLE_DB_PORT: 5432
+      VEHICLE_DB_NAME: ${VEHICLE_DB_NAME}
+      VEHICLE_DB_USER: ${VEHICLE_DB_USER}
+      VEHICLE_DB_PASSWORD: ${VEHICLE_DB_PASSWORD}
+      # Resource server (SEC): issuer-uri solo existe en application-dev.properties,
+      # asi que en perfil prod el contexto no arranca ("required a bean of type
+      # JwtDecoder that could not be found"). Se inyecta desde aqui en vez de
+      # copiar la linea al .properties de prod, porque los dos valores son
+      # distintos y ninguno sirve para lo del otro:
+      #
+      #   jwk-set-uri -> por donde el micro DESCARGA la clave publica. Tiene que
+      #                  ser la red interna (keycloak:8080); localhost:8180 no
+      #                  resuelve dentro del contenedor.
+      #   issuer-uri  -> que `iss` EXIGE el micro en el token. Tiene que ser el
+      #                  publico, el mismo que Kong tiene como key del consumer.
+      #
+      # Con los dos puestos, Spring construye el decoder desde jwk-set-uri (sin
+      # discovery, que es lo que fallaria) y usa issuer-uri solo como validador
+      # del claim iss. Ver KC_HOSTNAME en docker-compose.yml.
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: ${KEYCLOAK_PUBLIC_URL:-http://localhost:8180}/realms/${KEYCLOAK_REALM:-parking}
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/${KEYCLOAK_REALM:-parking}/protocol/openid-connect/certs
+      # SSE-06: vehicle-service publica vehicle-changed-v1. Sin estas dos cae al
+      # default "guest", que RabbitMQ solo admite desde localhost, y cada publish
+      # falla con ACCESS_REFUSED (el relay lo traga, asi que se ve en el log del
+      # micro pero no rompe el CRUD).
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+    depends_on:
+      vehicle-db:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q '\"status\":\"UP\"' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - parking-shared
+
+  spot-db:
+    image: postgres:15.18-alpine
+    container_name: parking-spot-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${SPOT_DB_USER}
+      POSTGRES_PASSWORD: ${SPOT_DB_PASSWORD}
+      POSTGRES_DB: ${SPOT_DB_NAME}
+    ports:
+      - "${SPOT_DB_PORT:-5434}:5432"
+    volumes:
+      - parking-spot-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${SPOT_DB_USER} -d ${SPOT_DB_NAME}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - parking-shared
+
+  spot-service:
+    build:
+      context: ../tartis-recon-ai-parking-spotService/backend/spot-service
+    container_name: parking-spot-service
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SPOT_DB_HOST: spot-db
+      SPOT_DB_PORT: 5432
+      SPOT_DB_NAME: ${SPOT_DB_NAME}
+      SPOT_DB_USER: ${SPOT_DB_USER}
+      SPOT_DB_PASSWORD: ${SPOT_DB_PASSWORD}
+      # Ver el bloque comentado de vehicle-service. spot ya tiene SecurityConfig
+      # (SEC-06, mergeado en release).
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: ${KEYCLOAK_PUBLIC_URL:-http://localhost:8180}/realms/${KEYCLOAK_REALM:-parking}
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/${KEYCLOAK_REALM:-parking}/protocol/openid-connect/certs
+      # ASY-06/07 (mergeado en release el 30/07): spot-service ahora consume
+      # RabbitMQ (SpotEventListenerAdapter). Sin estas dos, spring.rabbitmq.username/
+      # password caen al default "guest" del .properties y el contenedor no
+      # arranca (ACCESS_REFUSED, "guest" solo esta permitido desde localhost).
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+    depends_on:
+      spot-db:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q '\"status\":\"UP\"' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - parking-shared
+
+  tariff-db:
+    image: postgres:15.18-alpine
+    container_name: parking-tariff-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${TARIFF_DB_USER}
+      POSTGRES_PASSWORD: ${TARIFF_DB_PASSWORD}
+      POSTGRES_DB: ${TARIFF_DB_NAME}
+    ports:
+      - "${TARIFF_DB_PORT:-5435}:5432"
+    volumes:
+      - parking-tariff-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${TARIFF_DB_USER} -d ${TARIFF_DB_NAME}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - parking-shared
+
+  tariff-service:
+    build:
+      context: ../tartis-recon-ai-parking-tariffService/backend/tariff-service
+    container_name: parking-tariff-service
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      TARIFF_DB_HOST: tariff-db
+      TARIFF_DB_PORT: 5432
+      TARIFF_DB_NAME: ${TARIFF_DB_NAME}
+      TARIFF_DB_USER: ${TARIFF_DB_USER}
+      TARIFF_DB_PASSWORD: ${TARIFF_DB_PASSWORD}
+      # SEC-07 (revision PR #44): jwk-set-uri usa el hostname interno de la
+      # red de Docker (donde el contenedor SI llega a Keycloak); issuer se
+      # queda en localhost:8180 porque es el iss real que trae el token y el
+      # mismo valor fijado en kong/kong.yml. No son intercambiables.
+      #
+      # [merge 30/07] El diagnostico de arriba es correcto y se conserva tal
+      # cual. Solo cambian los NOMBRES: KEYCLOAK_JWKS_URI/KEYCLOAK_ISSUER no
+      # los lee nadie (no aparecen en ninguna rama de tariff, ni como
+      # ${...} en sus .properties), asi que el contenedor los recibia y los
+      # ignoraba. Estos otros son los nombres canonicos de Spring y los bindea
+      # el solo por relaxed binding, sin tocar ningun .properties. Verificado
+      # arrancando vehicle-service en perfil prod: sin ellos falla con "required
+      # a bean of type JwtDecoder"; con ellos levanta y responde 401/200.
+      #
+      # Se ponen en los 5 servicios, no solo en los 3 que hoy tienen
+      # SecurityConfig, para que los PRs #42 y #44 no repitan el fallo al entrar.
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: ${KEYCLOAK_PUBLIC_URL:-http://localhost:8180}/realms/${KEYCLOAK_REALM:-parking}
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/${KEYCLOAK_REALM:-parking}/protocol/openid-connect/certs
+      # SSE-06: faltaban desde que tariff-service publica tariff-changed-v1.
+      # Sin ellas caia al default "guest" (ACCESS_REFUSED fuera de localhost):
+      # el evento no llegaba nunca al broker y, ademas, el indicador de salud
+      # de RabbitMQ dejaba /actuator/health en 503 -> contenedor unhealthy, que
+      # a su vez bloquea el arranque de stay-service (depends_on healthy).
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+    depends_on:
+      tariff-db:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q '\"status\":\"UP\"' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - parking-shared
+
+  ticket-db:
+    image: postgres:15.18-alpine
+    container_name: parking-ticket-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${TICKET_DB_USER}
+      POSTGRES_PASSWORD: ${TICKET_DB_PASSWORD}
+      POSTGRES_DB: ${TICKET_DB_NAME}
+    ports:
+      - "${TICKET_DB_PORT:-5436}:5432"
+    volumes:
+      - parking-ticket-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${TICKET_DB_USER} -d ${TICKET_DB_NAME}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - parking-shared
+
+  ticket-service:
+    build:
+      context: ../tartis-recon-ai-parking-ticketService/backend/ticket-service
+    container_name: parking-ticket-service
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      TICKET_DB_HOST: ticket-db
+      TICKET_DB_PORT: 5432
+      TICKET_DB_NAME: ${TICKET_DB_NAME}
+      TICKET_DB_USER: ${TICKET_DB_USER}
+      TICKET_DB_PASSWORD: ${TICKET_DB_PASSWORD}
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      # Ver el bloque comentado de vehicle-service.
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: ${KEYCLOAK_PUBLIC_URL:-http://localhost:8180}/realms/${KEYCLOAK_REALM:-parking}
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/${KEYCLOAK_REALM:-parking}/protocol/openid-connect/certs
+    depends_on:
+      ticket-db:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q '\"status\":\"UP\"' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - parking-shared
+
+  stay-db:
+    image: postgres:15.18-alpine
+    container_name: parking-stay-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${STAY_DB_USER}
+      POSTGRES_PASSWORD: ${STAY_DB_PASSWORD}
+      POSTGRES_DB: ${STAY_DB_NAME}
+    ports:
+      - "${STAY_DB_PORT:-5437}:5432"
+    volumes:
+      - parking-stay-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${STAY_DB_USER} -d ${STAY_DB_NAME}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - parking-shared
+
+  stay-service:
+    build:
+      context: ../tartis-recon-ai-parking-stayService/backend/stay-service
+    container_name: parking-stay-service
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      STAY_DB_HOST: stay-db
+      STAY_DB_PORT: 5432
+      STAY_DB_NAME: ${STAY_DB_NAME}
+      STAY_DB_USER: ${STAY_DB_USER}
+      STAY_DB_PASSWORD: ${STAY_DB_PASSWORD}
+      # Orquestacion: los defaults de application.properties ya apuntan a
+      # estos hostnames de Docker (spot-service:8080, etc.), no hace falta
+      # sobreescribirlos aqui.
+      #
+      # Ver el bloque comentado de vehicle-service. Esto cubre los tokens que
+      # stay RECIBE.
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: ${KEYCLOAK_PUBLIC_URL:-http://localhost:8180}/realms/${KEYCLOAK_REALM:-parking}
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/${KEYCLOAK_REALM:-parking}/protocol/openid-connect/certs
+      # Y esto los que stay EMITE. Es el unico microservicio que llama a otros
+      # por HTTP, y lo hace sin usuario detras, asi que necesita un token
+      # propio via client_credentials. Sin esto sus 4 llamadas salientes van
+      # sin Authorization y el check-in falla entero con un 401 que ademas se
+      # enmascara como "matricula no valida".
+      #
+      # token-uri interno (keycloak:8080) porque lo pide desde el contenedor;
+      # el `iss` del token que sale sigue siendo el publico gracias a
+      # KC_HOSTNAME, que es lo que esperan los otros servicios.
+      STAY_CLIENT_ID: ${STAY_CLIENT_ID:-parking-stay-service}
+      STAY_CLIENT_SECRET: ${STAY_CLIENT_SECRET:?falta STAY_CLIENT_SECRET en .env}
+      KEYCLOAK_TOKEN_URI: http://keycloak:8080/realms/${KEYCLOAK_REALM:-parking}/protocol/openid-connect/token
+      # stay es quien DECLARA el exchange y las dos colas de stay-closed-v1,
+      # asi que sin credenciales no se crea la topologia. Faltaban: solo las
+      # tenia ticket-service (ASY-05). Se vio al levantar el stack completo,
+      # con stay en unhealthy por el indicador de salud de RabbitMQ del
+      # actuator y sin spot-service-stay-closed-queue en el broker.
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+    depends_on:
+      stay-db:
+        condition: service_healthy
+      vehicle-service:
+        condition: service_healthy
+      spot-service:
+        condition: service_healthy
+      tariff-service:
+        condition: service_healthy
+      ticket-service:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q '\"status\":\"UP\"' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - parking-shared
+
+  frontend:
+    build:
+      context: ../tartis-recon-ai-parking-frontend/tartis-recon-ai-frontend
+      args:
+        # mfe-entryexit ya no publica puerto de host: se sirve bajo el mismo
+        # origen que el shell via Kong (/mfe/entryexit/..., kong/kong.yml), asi
+        # que el remoto es una ruta relativa, no un host:puerto.
+        VITE_MFE_ENTRYEXIT_URL: "${MFE_ENTRYEXIT_URL:-/mfe/entryexit/assets/remoteEntry.js}"
+        # mfe-admin ya contenerizado: mismo tratamiento que mfe-entryexit
+        # arriba, ruta relativa via Kong (/mfe/admin/..., kong/kong.yml).
+        VITE_MFE_ADMIN_URL: "${MFE_ADMIN_URL:-/mfe/admin/assets/remoteEntry.js}"
+    container_name: parking-frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-8090}:80"
+    depends_on:
+      # Depende de Kong, NO de los microservicios. Su nginx dejo de hacer
+      # proxy_pass directo a cada micro y ahora solo habla con el gateway, asi
+      # que la lista anterior (vehicle/spot/tariff/stay) quedo obsoleta y le
+      # faltaba el unico upstream que de verdad usa.
+      #
+      # Y no es cosmetico: nginx resuelve los hostnames de `proxy_pass`
+      # literales AL CARGAR LA CONFIGURACION, no en cada peticion. Si el
+      # contenedor del frontend arranca antes que Kong, nginx muere con
+      # "host not found in upstream 'kong'" y restart: unless-stopped lo deja
+      # en bucle de reinicio.
+      kong:
+        condition: service_healthy
+    networks:
+      - parking-shared
+
+  mfe-entryexit:
+    build:
+      context: ../tartis-recon-ai-parking-mfe-entryexit
+      args:
+        # El shell se sirve en la raiz de Kong (mismo origen), asi que su
+        # remoto tambien es relativo — igual que VITE_MFE_ENTRYEXIT_URL arriba.
+        VITE_SHELL_URL: "/assets/remoteEntry.js"
+    container_name: parking-mfe-entryexit
+    restart: unless-stopped
+    # Sin puerto de host: solo se accede via Kong (/mfe/entryexit/...,
+    # kong/kong.yml). Para depurar el build en aislado, exponer un puerto
+    # localmente sin commitear.
+    #
+    # Sin proxy_pass a Kong (las llamadas de API salen del navegador directo a
+    # Kong via VITE_API_URL), así que no depende de kong para arrancar — solo
+    # sirve estático (remoteEntry.js + chunks), lo consume el shell en runtime.
+    networks:
+      - parking-shared
+
+  mfe-admin:
+    build:
+      context: ../tartis-recon-ai-parking-mfe-admin
+      args:
+        # El shell se sirve en la raiz de Kong (mismo origen), asi que su
+        # remoto tambien es relativo — igual que VITE_MFE_ADMIN_URL arriba.
+        VITE_SHELL_URL: "/assets/remoteEntry.js"
+    container_name: parking-mfe-admin
+    restart: unless-stopped
+    # Sin puerto de host: solo se accede via Kong (/mfe/admin/...,
+    # kong/kong.yml). Para depurar el build en aislado, exponer un puerto
+    # localmente sin commitear.
+    #
+    # Sin proxy_pass a Kong (las llamadas de API salen del navegador directo a
+    # Kong via VITE_API_URL), así que no depende de kong para arrancar — solo
+    # sirve estático (remoteEntry.js + chunks), lo consume el shell en runtime.
+    networks:
+      - parking-shared
+
+volumes:
+  parking-vehicle-db-data:
+  parking-spot-db-data:
+  parking-tariff-db-data:
+  parking-ticket-db-data:
+  parking-stay-db-data:
+
+networks:
+  parking-shared:
+    external: true

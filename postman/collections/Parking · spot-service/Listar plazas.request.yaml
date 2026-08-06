@@ -1,0 +1,13 @@
+$kind: http-request
+description: GET /v1/spots -> 200 con todas las plazas.
+url: "{{baseUrlSpot}}/v1/spots"
+method: GET
+headers:
+  Authorization: "Bearer {{accessToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200 OK', () => pm.response.to.have.status(200));
+      pm.test('devuelve un array', () => pm.expect(pm.response.json()).to.be.an('array'));
+    language: text/javascript
+order: 3000

@@ -1,0 +1,38 @@
+name: Parking - Local (dev)
+values:
+  - key: baseUrlVehicle
+    value: 'http://localhost:8080'
+  - key: baseUrlSpot
+    value: 'http://localhost:8081'
+  - key: baseUrlTariff
+    value: 'http://localhost:8082'
+  - key: baseUrlTicket
+    value: 'http://localhost:8083'
+  - key: baseUrlStay
+    value: 'http://localhost:8084'
+  - key: plate
+    value: 1234BCD
+  - key: vehicleType
+    value: CAR
+  - key: keycloakTokenUrl
+    value: 'http://localhost:8180/realms/parking/protocol/openid-connect/token'
+  - key: keycloakClientId
+    value: parking-frontend
+  - key: adminUser
+    value: admin.test
+  - key: adminPassword
+    value: Admin.123!
+  - key: accessToken
+    value: ''
+  - key: vehicleId
+    value: ''
+  - key: spotId
+    value: ''
+  - key: tariffId
+    value: ''
+  - key: entryTicketId
+    value: ''
+  - key: stayId
+    value: ''
+  - key: ticketId
+    value: ''

@@ -1,0 +1,24 @@
+$kind: http-request
+description: |-
+  PUT /v1/tariffs/{id} -> 200.
+
+  Solo `name`, `pricePerMinute` y `basePrice`. Mandar `type` o `active` aqui no hace nada: no estan en `TariffUpdateRequest`.
+url: "{{baseUrlTariff}}/v1/tariffs/{{tariffId}}"
+method: PUT
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "name": "Tarifa estandar coche (revisada)",
+      "pricePerMinute": 0.07,
+      "basePrice": 1.5
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200 OK', () => pm.response.to.have.status(200));
+      pm.test('precio actualizado', () => pm.expect(Number(pm.response.json().pricePerMinute)).to.eql(0.07));
+    language: text/javascript
+order: 6000

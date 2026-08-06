@@ -1,0 +1,7 @@
+$kind: collection
+description: |-
+  Las mismas 7 rutas, ahora con `Authorization: Bearer {{accessToken}}` (pedido
+  en "0. Auth"). Ninguna debe dar 401: si el token es valido, Kong lo deja
+  pasar y lo que responda a partir de ahi es cosa del microservicio (200, 404,
+  405... cualquier cosa menos 401).
+order: 3000

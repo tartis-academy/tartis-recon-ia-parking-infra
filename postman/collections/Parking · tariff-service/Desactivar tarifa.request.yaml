@@ -1,0 +1,22 @@
+$kind: http-request
+description: |-
+  PATCH /v1/tariffs/{id}/status -> 200.
+
+  `{"active": false}` -> `DeactivateTariffUseCase`; `{"active": true}` -> `ActivateTariffUseCase`. A diferencia de vehicle, aqui el PATCH **si** lee el body.
+url: "{{baseUrlTariff}}/v1/tariffs/{{tariffId}}/status"
+method: PATCH
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "active": false
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200 OK', () => pm.response.to.have.status(200));
+      pm.test('queda inactiva', () => pm.expect(pm.response.json().active).to.be.false);
+    language: text/javascript
+order: 7000

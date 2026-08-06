@@ -1,0 +1,3 @@
+$kind: collection
+description: Rutas del openapi.yml de stay que todavia no tienen metodo en `StayRestAdapter`. Todas dan 404.
+order: 1000

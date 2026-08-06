@@ -1,0 +1,38 @@
+$kind: http-request
+description: |-
+  POST /v1/stays/check-in -> 201 Created.
+
+  Body (`StayRequest`):
+  - `plate` — **obligatorio** (`@NotBlank`). Se normaliza en el dominio (IN-01).
+  - `vehicleType` — opcional, `String`. Solo hace falta si la matricula no esta registrada todavia (auto-alta). Valores: `CAR`, `CAR_PMR`, `MOTORBIKE`; cualquier otro -> 400.
+
+  Respuesta (`CheckInResponse`): `{stayId, plate, spotId, checkIn, status, entryTicket}`.
+
+  > `entryTicket` llega **siempre a null**: `StayRestMapper.toCheckInResponse` lo fija a null a proposito, la emision del ticket queda fuera del alcance de HU-01.
+  > `status` sera `IN_PROGRESS`.
+
+  **Requiere vehicle-service, spot-service y tariff-service levantados**, con las URLs de `services.*.url` apuntando a ellos (ver README).
+url: "{{baseUrlStay}}/v1/stays/check-in"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "plate": "{{plate}}",
+      "vehicleType": "{{vehicleType}}"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('201 Created', () => pm.response.to.have.status(201));
+      const body = pm.response.json();
+      pm.environment.set('stayId', body.stayId);
+      pm.environment.set('spotId', body.spotId);
+      pm.test('devuelve stayId', () => pm.expect(body.stayId).to.be.a('string'));
+      pm.test('estancia en curso', () => pm.expect(body.status).to.eql('IN_PROGRESS'));
+      pm.test('entryTicket sigue a null (fuera del alcance de HU-01)', () =>
+        pm.expect(body.entryTicket).to.be.null);
+    language: text/javascript
+order: 2000

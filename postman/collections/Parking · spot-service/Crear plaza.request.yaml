@@ -1,0 +1,25 @@
+$kind: http-request
+description: |-
+  POST /v1/spots -> 201 Created. Body: `{"type": "CAR"}`.
+
+  Guarda el id en `spotId`.
+url: "{{baseUrlSpot}}/v1/spots"
+method: POST
+headers:
+  Content-Type: application/json
+  Authorization: "Bearer {{accessToken}}"
+body:
+  type: json
+  content: |-
+    {
+      "type": "{{vehicleType}}"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('201 Created', () => pm.response.to.have.status(201));
+      const body = pm.response.json();
+      pm.environment.set('spotId', body.id);
+      pm.test('nace AVAILABLE', () => pm.expect(body.status).to.eql('AVAILABLE'));
+    language: text/javascript
+order: 2000

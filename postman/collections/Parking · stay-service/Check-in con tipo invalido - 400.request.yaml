@@ -1,0 +1,24 @@
+$kind: http-request
+name: Check-in con tipo invalido -> 400
+description: |-
+  `vehicleType` presente pero no reconocido -> **400** (`InvalidStayException` lanzada por `StayRestMapper.parseVehicleType`).
+
+  Un tipo ausente o vacio NO es error: se resuelve desde vehicle-service.
+url: "{{baseUrlStay}}/v1/stays/check-in"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "plate": "{{plate}}",
+      "vehicleType": "CAMION"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('400 Bad Request', () => pm.response.to.have.status(400));
+      pm.test('dice que el tipo no se reconoce', () => pm.expect(pm.response.json().message).to.include('Tipo de vehiculo'));
+    language: text/javascript
+order: 6000

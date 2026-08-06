@@ -1,0 +1,32 @@
+$kind: http-request
+description: |-
+  POST /v1/spots/occupy -> 200 con la plaza asignada.
+
+  Body: `{"vehicleType": "CAR"}` — `vehicleType` es el campo canonico de
+  `SpotOccupyRequest`. `type` se acepta como alias temporal
+  (`@JsonAlias("type")`) solo para no acoplar el orden de despliegue con
+  stay-service; se retira cuando stay-service migre.
+
+  Es el endpoint que stay-service necesita en el check-in. Si no queda ninguna plaza libre de ese tipo, aqui se materializa **RN-01 (parking completo)**.
+
+  > Ojo: `StaySpotClientAdapter.occupySpot` llama a esta ruta con **PATCH**, no con POST -> hoy recibe 405 y el check-in nunca ocupa plaza. Ver README, seccion 'Bugs conocidos'.
+url: "{{baseUrlSpot}}/v1/spots/occupy"
+method: POST
+headers:
+  Content-Type: application/json
+  Authorization: "Bearer {{accessToken}}"
+body:
+  type: json
+  content: |-
+    {
+      "vehicleType": "{{vehicleType}}"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200 OK', () => pm.response.to.have.status(200));
+      const body = pm.response.json();
+      pm.environment.set('spotId', body.id);
+      pm.test('queda OCCUPIED', () => pm.expect(body.status).to.eql('OCCUPIED'));
+    language: text/javascript
+order: 5000

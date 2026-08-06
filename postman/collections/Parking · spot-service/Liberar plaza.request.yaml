@@ -1,0 +1,16 @@
+$kind: http-request
+description: |-
+  POST /v1/spots/{id}/release -> 200. Sin body.
+
+  Es la compensacion que ejecuta el check-in (IN-25) si falla al guardar la estancia despues de haber ocupado la plaza.
+url: "{{baseUrlSpot}}/v1/spots/{{spotId}}/release"
+method: POST
+headers:
+  Authorization: "Bearer {{accessToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200 OK', () => pm.response.to.have.status(200));
+      pm.test('vuelve a AVAILABLE', () => pm.expect(pm.response.json().status).to.eql('AVAILABLE'));
+    language: text/javascript
+order: 6000

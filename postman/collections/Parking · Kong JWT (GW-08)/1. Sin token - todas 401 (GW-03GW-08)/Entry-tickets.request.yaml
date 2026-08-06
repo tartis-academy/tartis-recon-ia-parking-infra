@@ -1,0 +1,10 @@
+$kind: http-request
+description: Sin Authorization -> Kong debe rechazar antes de llegar a ticket-service.
+url: "{{kongBaseUrl}}/api/v1/entry-tickets"
+method: GET
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('401 Unauthorized (jwt plugin de Kong)', () => pm.response.to.have.status(401));
+    language: text/javascript
+order: 4000

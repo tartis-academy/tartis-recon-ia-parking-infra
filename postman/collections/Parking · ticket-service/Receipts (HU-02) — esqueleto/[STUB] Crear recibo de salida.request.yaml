@@ -1,0 +1,14 @@
+$kind: http-request
+description: POST /v1/receipts. El metodo acepta `@RequestBody Object` (sin DTO todavia) y hace `return null` -> 200 vacio.
+url: "{{baseUrlTicket}}/v1/receipts"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "stayId": "{{stayId}}",
+      "amount": 3.75
+    }
+order: 1000

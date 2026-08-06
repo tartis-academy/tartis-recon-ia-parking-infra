@@ -1,0 +1,41 @@
+$kind: http-request
+description: |-
+  Equivale al `getOrCreateVehicle` de `StayVehiclePort`: si la matricula no existe, se crea.
+
+  Genera una matricula aleatoria para poder reejecutar el flujo.
+url: "{{baseUrlVehicle}}/v1/vehicles"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "type": "{{vehicleType}}",
+      "plate": "{{plate}}",
+      "brand": "Seat",
+      "model": "Ibiza",
+      "color": "Blanco",
+      "numDoors": 5,
+      "hasSidecar": false,
+      "active": true
+    }
+scripts:
+  - type: beforeRequest
+    code: |-
+      const digits = String(Math.floor(1000 + Math.random() * 9000));
+      const abc = 'BCDFGHJKLMNPRSTVWXYZ';
+      let letters = '';
+      for (let i = 0; i < 3; i++) {
+        letters += abc.charAt(Math.floor(Math.random() * abc.length));
+      }
+      pm.environment.set('plate', digits + letters);
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test('201 Created', () => pm.response.to.have.status(201));
+      const body = pm.response.json();
+      pm.environment.set('vehicleId', body.uniqueId);
+      pm.test('activo (RN-11 lo dejaria pasar)', () => pm.expect(body.active).to.be.true);
+    language: text/javascript
+order: 3000

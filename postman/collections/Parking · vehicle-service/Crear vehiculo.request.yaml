@@ -1,0 +1,47 @@
+$kind: http-request
+description: |-
+  POST /v1/vehicles -> 201 Created.
+
+  `type`, `plate` y `active` son OBLIGATORIOS (validacion @NotBlank/@NotNull); si falta alguno -> 400.
+  El resto (`brand`, `model`, `color`, `numDoors`, `hasSidecar`) es opcional.
+
+  Guarda `uniqueId` en la variable de entorno `vehicleId` y la matricula en `plate`.
+url: "{{baseUrlVehicle}}/v1/vehicles"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "type": "{{vehicleType}}",
+      "plate": "{{plate}}",
+      "brand": "Seat",
+      "model": "Leon",
+      "color": "Gris",
+      "numDoors": 5,
+      "hasSidecar": false,
+      "active": true
+    }
+scripts:
+  - type: beforeRequest
+    code: |-
+      // Matricula aleatoria (formato ES: 4 digitos + 3 letras) para poder
+      // reejecutar la coleccion sin chocar con un vehiculo ya creado.
+      const digits = String(Math.floor(1000 + Math.random() * 9000));
+      const abc = 'BCDFGHJKLMNPRSTVWXYZ';
+      let letters = '';
+      for (let i = 0; i < 3; i++) {
+        letters += abc.charAt(Math.floor(Math.random() * abc.length));
+      }
+      pm.environment.set('plate', digits + letters);
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test('201 Created', () => pm.response.to.have.status(201));
+      const body = pm.response.json();
+      pm.test('devuelve uniqueId', () => pm.expect(body.uniqueId).to.be.a('string'));
+      pm.environment.set('vehicleId', body.uniqueId);
+      pm.environment.set('plate', body.plate);
+    language: text/javascript
+order: 3000

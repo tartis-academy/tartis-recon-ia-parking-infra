@@ -1,0 +1,16 @@
+$kind: collection
+description: |
+  tariff-service — verificado contra `origin/release123` el 2026-07-23.
+
+  Todos los endpoints de `TariffRestAdapter` estan implementados. Base path `/v1/tariffs`.
+
+  Tipos validos de `type`: `CAR`, `CAR_PMR`, `MOTORBIKE`.
+
+  Avisos sobre el contrato:
+  - `POST` usa `TariffCreateRequest` (`name`, `type`, `pricePerMinute`, `basePrice`,
+    `active`) y `PUT` usa `TariffUpdateRequest` (`name`, `pricePerMinute`,
+    `basePrice`): **el PUT no acepta `type` ni `active`**. El tipo no se cambia una
+    vez creada; el estado se cambia con el PATCH.
+  - `pricePerMinute` debe ser > 0 y `basePrice` >= 0 (`@DecimalMin`).
+  - `POST /v1/tariffs/calculate` — el que stay necesitaria en el check-OUT — **no
+    existe**. Tampoco `GET /v1/tariffs/current` ni `PATCH /{id}/deactivate`.

@@ -1,0 +1,20 @@
+$kind: http-request
+name: "Preparar: crear plaza libre"
+description: Necesitamos al menos una plaza AVAILABLE del tipo correcto, o el paso de ocupar fallara por RN-01.
+url: "{{baseUrlSpot}}/v1/spots"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "type": "{{vehicleType}}"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('201 Created', () => pm.response.to.have.status(201));
+      pm.environment.set('spotId', pm.response.json().id);
+    language: text/javascript
+order: 2000

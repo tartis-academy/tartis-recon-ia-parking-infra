@@ -1,0 +1,43 @@
+name: Validar infra
+
+on:
+  pull_request:
+    paths:
+      - "docker-compose*.yml"
+      - "kong/**"
+      - ".env.example"
+      - "scripts/ci/**"
+      - ".github/workflows/validate-infra.yml"
+  push:
+    branches: [main]
+    paths:
+      - "docker-compose*.yml"
+      - "kong/**"
+      - ".env.example"
+      - "scripts/ci/**"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Preparar .env de prueba desde .env.example
+        run: cp .env.example .env
+
+      - name: docker compose config (plataforma + BD de dev + pgAdmin)
+        run: docker compose -f docker-compose.yml -f docker-compose.dev.yml config -q
+
+      - name: docker compose config (plataforma + stack completo)
+        run: docker compose -f docker-compose.yml -f docker-compose.demo.yml config -q
+
+      - name: Validar kong.yml
+        run: |
+          docker run --rm -e KONG_DATABASE=off \
+            -v "${{ github.workspace }}/kong:/kong/declarative:ro" \
+            kong:3.9 kong config parse /kong/declarative/kong.yml
+
+      - name: Invariantes de seguridad del plugin jwt en kong.yml
+        run: |
+          pip install --quiet pyyaml
+          python3 scripts/ci/validate_kong.py kong/kong.yml
