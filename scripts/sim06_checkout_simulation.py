@@ -125,22 +125,28 @@ def run_checkout_simulation(authenticator, args):
             "Content-Type": "application/json",
             "Accept": "application/json",
         }
-        checkin_req = Request(checkin_url, data=checkin_payload, headers=headers, method="POST")
-
-        try:
-            with urlopen(checkin_req, timeout=10) as resp:
-                status_in = resp.getcode()
-                if status_in not in (200, 201):
-                    logger.warning("[%d/%d] Check-In fallido para %s -> HTTP %d", i, len(plates), plate, status_in)
-                    fail_count += 1
+        
+        status_in = 0
+        for attempt in range(3):
+            checkin_req = Request(checkin_url, data=checkin_payload, headers=headers, method="POST")
+            try:
+                with urlopen(checkin_req, timeout=10) as resp:
+                    status_in = resp.getcode()
+                    if status_in in (200, 201):
+                        break
+            except HTTPError as e:
+                status_in = e.code
+                if e.code == 503 and attempt < 2:
+                    time.sleep(0.5)
                     continue
-        except HTTPError as e:
-            err_body = e.read().decode("utf-8") if e.fp else ""
-            logger.error("[%d/%d] Check-In FAIL %s (%s) -> HTTP %d %s", i, len(plates), plate, vehicle_type, e.code, err_body)
-            fail_count += 1
-            continue
-        except Exception as e:
-            logger.error("[%d/%d] Check-In ERROR %s -> Excepcion: %s", i, len(plates), plate, e)
+                err_body = e.read().decode("utf-8") if e.fp else ""
+                logger.error("[%d/%d] Check-In FAIL %s (%s) -> HTTP %d %s", i, len(plates), plate, vehicle_type, e.code, err_body)
+                break
+            except Exception as e:
+                logger.error("[%d/%d] Check-In ERROR %s -> Excepcion: %s", i, len(plates), plate, e)
+                break
+
+        if status_in not in (200, 201):
             fail_count += 1
             continue
 
