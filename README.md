@@ -26,6 +26,31 @@ El sistema automatiza el control de acceso, la asignación atómica de plazas, e
 
 ## Componentes del Ecosistema
 
+```text
+                                +-----------------------------------+
+                                |    Frontend App (React + Vite)    |
+                                +-----------------------------------+
+                                                  |
+                                                  v
++------------------------+      +-----------------------------------+
+|  Keycloak (OIDC / IdP) | <==> |     API Gateway (Kong DB-less)    |
++------------------------+      +-----------------------------------+
+                                                  |
+       +-------------------+----------------------+-------------------+-------------------+
+       |                   |                      |                   |                   |
+       v                   v                      v                   v                   v
++--------------+    +--------------+      +--------------+    +--------------+    +--------------+
+| vehicle-svc  |    |  spot-svc    |      |  tariff-svc  |    |  ticket-svc  |    |   stay-svc   |
+| (Port 8081)  |    | (Port 8082)  |      | (Port 8083)  |    | (Port 8084)  |    | (Port 8085)  |
++--------------+    +--------------+      +--------------+    +--------------+    +--------------+
+       |                   ^                      |                   ^                   | (publica)
+       |                   |                      |                   |                   v
+       |                   +============== [ RABBITMQ ] ==============+<==================+
+       |                               (Exchange: stay.events)
+       v                   v                      v                   v                   v
+[( vehicle_db )]    [(  spot_db  )]        [( tariff_db )]     [( ticket_db )]     [(  stay_db  )]
+```
+
 ### 1. Frontend (Aplicación Web & Kiosk)
 Aplicación SPA desarrollada en **React 18**, **TypeScript**, **Vite** y **Tailwind CSS**.
 - **Terminal Entrada/Salida (Kiosk):** Interfaz para terminales en barrera (check-in, escaneo de códigos de barras, inicio de check-out e impresión de tickets).
