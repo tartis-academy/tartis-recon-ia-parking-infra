@@ -157,9 +157,14 @@ En una terminal, trafico continuo; en otra, matar una replica a mitad:
 ```
 
 ```bash
-kubectl -n parking delete pod -l app.kubernetes.io/name=spot-service --field-selector status.phase=Running -o name | head -1 | xargs kubectl -n parking delete
+POD=$(kubectl -n parking get pods -l app.kubernetes.io/name=spot-service -o name | head -1)
+kubectl -n parking delete $POD
 kubectl -n parking get pods -l app.kubernetes.io/name=spot-service -w
 ```
+
+`delete pod -l ... | head -1` **no** vale, aunque es lo que ponia aqui antes:
+`delete -l` borra todas las replicas que casen con la etiqueta y el `head -1`
+solo recorta la salida. Hay que elegir una con `get` y borrar esa.
 
 El trafico sigue en 201 sin un solo fallo y el pod se reemplaza solo. Medido:
 **20/20 en 201**, con una peticion que espero 1,8s durante el corte.
