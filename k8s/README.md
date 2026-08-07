@@ -132,21 +132,44 @@ mismos puertos que en Compose, luego el mismo environment vale para los dos.
 
 Lo que se ensena y en que orden. Requiere el stack levantado y sembrado.
 
-**1. Recuperacion automatica.** En una terminal, trafico continuo:
+**1. Recuperacion automatica.** Se hace sobre **spot-service**, no sobre
+stay-service: el check-in llama a spot de forma sincrona, asi que ejerce la
+misma cadena, pero sin tocar el SSE.
+
+> [!warning] Con una sola replica esto NO funciona, y el PDB no salva nada
+> Medido el 2026-08-07: matar el pod de stay-service con **1 replica** tira
+> **12 de 25** peticiones (10 x 502 y 2 timeouts de 30s). Un PDB no puede
+> proteger un deployment de una sola replica, solo impide drenajes voluntarios.
+> Hay que escalar **antes**, y escalar tarda ~70s: no se improvisa en directo.
+
+Preparacion (antes de tener publico delante):
 
 ```bash
-COUNT=25 MIN_DELAY=0 MAX_DELAY=1 ./scripts/checkin-traffic.sh
+kubectl -n parking scale deployment spot-service --replicas=2
+kubectl apply -f k8s/21-resiliencia-demo.yaml       # PDB, minAvailable 1
+kubectl -n parking rollout status deploy/spot-service
 ```
 
-En otra, matar una replica a mitad de la tanda:
+En una terminal, trafico continuo; en otra, matar una replica a mitad:
 
 ```bash
-kubectl -n parking delete pod -l app.kubernetes.io/name=stay-service --field-selector status.phase=Running | head -1
-kubectl -n parking get pods -l app.kubernetes.io/name=stay-service -w
+./scripts/traffic-gen.py --vehicles 20 --rate 3 --concurrency 3
 ```
 
-El trafico sigue en 201 sin un solo fallo (el PDB garantiza que quede una
-replica sirviendo) y el pod eliminado se reemplaza solo. Medido: 25/25 en 201.
+```bash
+kubectl -n parking delete pod -l app.kubernetes.io/name=spot-service --field-selector status.phase=Running -o name | head -1 | xargs kubectl -n parking delete
+kubectl -n parking get pods -l app.kubernetes.io/name=spot-service -w
+```
+
+El trafico sigue en 201 sin un solo fallo y el pod se reemplaza solo. Medido:
+**20/20 en 201**, con una peticion que espero 1,8s durante el corte.
+
+Al terminar:
+
+```bash
+kubectl delete -f k8s/21-resiliencia-demo.yaml
+kubectl -n parking scale deployment spot-service --replicas=1
+```
 
 **2. Autoescalado.** El HPA **no esta en el stack por defecto**: hay que
 aplicarlo a mano y quitarlo al terminar.

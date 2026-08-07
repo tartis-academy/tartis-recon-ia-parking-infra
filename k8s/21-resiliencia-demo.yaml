@@ -1,0 +1,35 @@
+# NO esta en kustomization.yaml a proposito: se aplica solo para la demo de
+# recuperacion automatica y se quita al terminar.
+#
+#   kubectl -n parking scale deployment spot-service --replicas=2
+#   kubectl apply -f k8s/21-resiliencia-demo.yaml
+#   kubectl -n parking rollout status deploy/spot-service
+#   ...demo: matar un pod con trafico de fondo...
+#   kubectl delete -f k8s/21-resiliencia-demo.yaml
+#   kubectl -n parking scale deployment spot-service --replicas=1
+#
+# El escalado va aparte y no como Deployment aqui: un Deployment con solo
+# `replicas` no pasa la validacion de `kubectl apply` (exige selector y
+# template), y repetir el manifiesto entero solo para cambiar un numero se
+# desincroniza del de verdad (11-spot.yaml) a la primera.
+#
+# Por que spot-service y no stay-service: el check-in llama a spot de forma
+# sincrona, asi que matar un pod de spot con trafico ejerce la misma cadena,
+# pero sin tocar el SSE. Escalar stay-service a 2 replicas hace que un cliente
+# SSE pierda eventos (ver 20-autoscaling.yaml), y con 1 sola replica el PDB no
+# puede proteger nada: medido el 2026-08-07, matar el pod de stay con 1 replica
+# tira 12 de 25 peticiones; con 2 replicas, 25/25 en 201.
+#
+# Con 2 replicas este PDB deja allowedDisruptions en 1: un drenaje de nodo puede
+# llevarse una replica, nunca las dos. Con 1 sola replica bloquearia el drenaje
+# para siempre, que es justo por lo que no va en el stack por defecto.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: spot-service
+  namespace: parking
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: spot-service
