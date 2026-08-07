@@ -1,0 +1,10 @@
+$kind: collection
+description: |-
+  El check-in completo en una sola llamada a stay-service: resuelve el vehiculo
+  (dandolo de alta si no existe), aplica RN-11 y CB-05, ocupa plaza (RN-01),
+  crea la estancia y compensa si algo falla (IN-25).
+
+  Las dos verificaciones del final son lo que distingue esta carpeta de "parece
+  que responde 201": comprueban contra spot-service que la plaza quedo
+  realmente `OCCUPIED`, y que reentrar con la misma matricula da 409.
+order: 2000

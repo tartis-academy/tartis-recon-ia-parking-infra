@@ -1,0 +1,33 @@
+$kind: collection
+description: |
+  Flujo completo de entrada y salida del parking **entrando por Kong**, con JWT
+  real de Keycloak. Es la unica coleccion funcional que sirve desde una maquina
+  distinta a la que corre el stack (p. ej. Windows con un tunel SSH): solo usa
+  `localhost:8000` (Kong) y `localhost:8180` (Keycloak).
+
+  > La coleccion `Parking · E2E check-in` NO vale para eso: llama a los puertos
+  > directos de los microservicios (8080-8084), que GW-07 cerro y que el tunel
+  > no reenvia. Aquella sigue siendo util contra el stack local a pelo.
+
+  Vale igual contra Compose que contra Kubernetes: los dos publican los mismos
+  dos puertos a proposito.
+
+  Requisitos: stack levantado y sembrado (`./demo-stack.sh up` o
+  `./k8s/k8s-stack.sh up`) y el environment **Parking - Kong (dev)**
+  seleccionado.
+
+  Ejecutar de arriba a abajo (o con el Collection Runner):
+
+  1. **0. Auth** — token de `admin.test` contra Keycloak, lo guarda en
+     `accessToken`. Comprueba ademas que el token trae el rol que Spring
+     Security exigira despues.
+  2. **1. Check-in real** — una plaza libre, el check-in de una matricula
+     aleatoria, y las dos verificaciones que prueban que la orquestacion llego
+     de verdad a spot-service (plaza `OCCUPIED`) y que CB-05 se aplica (409 al
+     reentrar).
+  3. **2. Check-out real** — cierra la estancia, comprueba importe y ticket, y
+     que la plaza vuelve a quedar libre.
+  4. **3. Consultas** — listado y filtrado de estancias.
+
+  Cada peticion lleva `Authorization: Bearer {{accessToken}}`. Sin la carpeta
+  **0. Auth** ejecutada antes, todo lo demas da 401 emitido por Kong.

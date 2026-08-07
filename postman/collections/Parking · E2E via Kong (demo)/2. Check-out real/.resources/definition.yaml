@@ -1,0 +1,9 @@
+$kind: collection
+description: |-
+  Cierra la estancia abierta en la carpeta anterior: calcula el importe contra
+  tariff-service, emite el ticket de salida contra ticket-service y libera la
+  plaza.
+
+  Depende de que "1. Check-in real" haya corrido antes en la misma tanda: usa
+  la matricula y el `spotId` que dejo en el environment.
+order: 3000

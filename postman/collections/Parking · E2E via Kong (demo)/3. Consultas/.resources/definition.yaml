@@ -1,0 +1,5 @@
+$kind: collection
+description: |-
+  Lectura del histórico. Sirve para enseñar en la demo que la estancia que se
+  acaba de cerrar aparece ya en el listado, y que el filtro por estado funciona.
+order: 4000

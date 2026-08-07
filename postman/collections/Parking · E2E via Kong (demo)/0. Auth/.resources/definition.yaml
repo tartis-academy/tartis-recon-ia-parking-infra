@@ -1,0 +1,5 @@
+$kind: collection
+description: |-
+  Consigue el token que consume todo lo demas. Si esta carpeta no se ejecuta,
+  el resto da 401 emitido por Kong (ni siquiera llega al microservicio).
+order: 1000

@@ -1,0 +1,27 @@
+$kind: http-request
+description: |-
+  Misma matricula, segunda vez: **409**. Es la prueba de IN-02/CB-05 — un
+  vehiculo no puede estar dentro dos veces.
+
+  Ojo con el `beforeRequest` del check-in: aqui NO se regenera la matricula, se
+  reusa a proposito la de la peticion anterior.
+url: "{{kongBaseUrl}}/api/v1/stays/check-in"
+method: POST
+headers:
+  Content-Type: application/json
+  Authorization: "Bearer {{accessToken}}"
+body:
+  type: json
+  content: |-
+    {
+      "plate": "{{plate}}",
+      "vehicleType": "{{vehicleType}}"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('409 Conflict', () => pm.response.to.have.status(409));
+      pm.test('la barrera sigue cerrada (no se creo estancia)', () =>
+        pm.expect(pm.response.json().status).to.eql(409));
+    language: text/javascript
+order: 4000

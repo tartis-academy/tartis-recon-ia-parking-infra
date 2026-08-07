@@ -1,0 +1,46 @@
+$kind: http-request
+description: |-
+  Cierra el bucle asincrono del cobro: el check-out devolvio `ticketId: null`,
+  pero ticket-service acaba emitiendo el ticket al consumir `StayClosedEvent`.
+
+  Busca en el listado un ticket cuyo `stayId` sea el de la estancia recien
+  cerrada. Si nunca aparece, el evento no se esta consumiendo — y eso si es un
+  fallo real, no consistencia eventual.
+url: "{{kongBaseUrl}}/api/v1/tickets?page=0&size=20"
+method: GET
+headers:
+  Authorization: "Bearer {{accessToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200 OK', () => pm.response.to.have.status(200));
+
+      pm.test('el ticket de salida acaba emitido (via RabbitMQ)', function (done) {
+        const stayId = pm.environment.get('stayId');
+        const encontrado = (body) => (body.content || []).some(t => t.stayId === stayId);
+
+        if (encontrado(pm.response.json())) { pm.expect(true).to.be.true; return done(); }
+
+        let intentos = 0;
+        const reintentar = () => {
+          pm.sendRequest({
+            url: pm.environment.get('kongBaseUrl') + '/api/v1/tickets?page=0&size=20',
+            method: 'GET',
+            header: { Authorization: 'Bearer ' + pm.environment.get('accessToken') }
+          }, (err, res) => {
+            if (err) { return done(err); }
+            if (encontrado(res.json())) {
+              pm.expect(true).to.be.true;
+              return done();
+            }
+            if (++intentos >= 20) {
+              pm.expect.fail('no aparecio ticket para stayId=' + stayId + ' tras ~3s');
+              return done();
+            }
+            setTimeout(reintentar, 150);
+          });
+        };
+        reintentar();
+      });
+    language: text/javascript
+order: 3000

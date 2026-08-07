@@ -1,0 +1,34 @@
+$kind: http-request
+description: |-
+  El cobro. Unica llamada sincrona que queda en el check-out: el importe tiene
+  que viajar en esta misma respuesta, asi que stay pregunta a tariff-service en
+  caliente.
+
+  **`ticketId` viene `null` a proposito**, no es un bug. Desde Fase II el ticket
+  de salida lo genera ticket-service al consumir `StayClosedEvent`, y liberar la
+  plaza lo hace spot-service consumiendo el mismo evento: cuando esta respuesta
+  llega al cliente, ninguna de las dos cosas ha pasado todavia. El campo es
+  opcional en el contrato REST. Las dos peticiones siguientes son las que
+  comprueban que el bucle asincrono se cierra.
+url: "{{kongBaseUrl}}/api/v1/stays/check-out"
+method: POST
+headers:
+  Content-Type: application/json
+  Authorization: "Bearer {{accessToken}}"
+body:
+  type: json
+  content: |-
+    {
+      "plate": "{{plate}}"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200 OK', () => pm.response.to.have.status(200));
+      const body = pm.response.json();
+      pm.test('estancia FINISHED', () => pm.expect(body.status).to.eql('FINISHED'));
+      pm.test('importe calculado', () => pm.expect(Number(body.amount)).to.be.above(0));
+      pm.test('ticketId null: el ticket es asincrono (no es un fallo)', () =>
+        pm.expect(body.ticketId).to.eql(null));
+    language: text/javascript
+order: 1000

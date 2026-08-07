@@ -20,3 +20,9 @@ values:
     value: 1234BCD
   - key: vehicleType
     value: CAR
+  - key: spotId
+    value: ''
+  - key: stayId
+    value: ''
+  - key: ticketId
+    value: ''

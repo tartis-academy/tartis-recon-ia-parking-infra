@@ -1,0 +1,23 @@
+$kind: http-request
+description: |-
+  Garantiza que hay al menos una plaza `AVAILABLE` del tipo, para que el
+  check-in no dependa de como haya quedado el parking de la ejecucion anterior.
+
+  El seed ya crea 50 plazas; esta de mas solo si ninguna esta ocupada.
+url: "{{kongBaseUrl}}/api/v1/spots"
+method: POST
+headers:
+  Content-Type: application/json
+  Authorization: "Bearer {{accessToken}}"
+body:
+  type: json
+  content: |-
+    {
+      "type": "{{vehicleType}}"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('201 Created', () => pm.response.to.have.status(201));
+    language: text/javascript
+order: 1000

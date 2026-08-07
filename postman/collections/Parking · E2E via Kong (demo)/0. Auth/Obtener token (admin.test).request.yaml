@@ -1,0 +1,40 @@
+$kind: http-request
+description: |-
+  Token por `grant_type=password`. `parking-frontend` es publico con
+  `directAccessGrantsEnabled: true` (`realm-export.dev-only.json`), asi que no
+  hace falta `client_secret`.
+
+  Va directo a Keycloak (`:8180`), no por Kong: el token endpoint es lo unico
+  del flujo que no pasa por el gateway.
+url: "{{keycloakTokenUrl}}"
+method: POST
+headers:
+  Content-Type: application/x-www-form-urlencoded
+body:
+  type: urlencoded
+  content:
+    - key: grant_type
+      value: password
+    - key: client_id
+      value: "{{keycloakClientId}}"
+    - key: username
+      value: "{{adminUser}}"
+    - key: password
+      value: "{{adminPassword}}"
+    - key: scope
+      value: openid
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200 OK', () => pm.response.to.have.status(200));
+      const body = pm.response.json();
+      pm.test('devuelve access_token', () => pm.expect(body.access_token).to.be.a('string'));
+      pm.environment.set('accessToken', body.access_token);
+
+      // Kong solo valida firma y claims; el rol lo exige Spring Security ya
+      // dentro del micro, y un token sin el da 403, no 401.
+      const claims = JSON.parse(atob(body.access_token.split('.')[1]));
+      pm.test('el token trae rol ADMIN', () =>
+        pm.expect(claims.realm_access.roles).to.include('ADMIN'));
+    language: text/javascript
+order: 1000

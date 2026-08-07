@@ -1,0 +1,14 @@
+$kind: http-request
+description: Primera pagina del histórico de estancias.
+url: "{{kongBaseUrl}}/api/v1/stays?page=0&size=5"
+method: GET
+headers:
+  Authorization: "Bearer {{accessToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200 OK', () => pm.response.to.have.status(200));
+      pm.test('devuelve una pagina', () =>
+        pm.expect(pm.response.json().content).to.be.an('array'));
+    language: text/javascript
+order: 1000

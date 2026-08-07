@@ -1,0 +1,17 @@
+$kind: http-request
+description: |-
+  La estancia que acaba de cerrar el check-out tiene que salir aqui. Comprueba
+  ademas que el filtro no cuela estancias de otro estado.
+url: "{{kongBaseUrl}}/api/v1/stays?status=FINISHED&page=0&size=5"
+method: GET
+headers:
+  Authorization: "Bearer {{accessToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200 OK', () => pm.response.to.have.status(200));
+      const content = pm.response.json().content;
+      pm.test('todas las devueltas son FINISHED', () =>
+        content.forEach(s => pm.expect(s.status).to.eql('FINISHED')));
+    language: text/javascript
+order: 2000

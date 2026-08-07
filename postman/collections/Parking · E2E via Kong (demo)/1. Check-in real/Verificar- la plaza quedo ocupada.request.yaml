@@ -1,0 +1,19 @@
+$kind: http-request
+description: |-
+  La prueba de que la orquestacion llego de verdad hasta spot-service: la plaza
+  que devolvio el check-in tiene que estar `OCCUPIED`.
+
+  Si sale `AVAILABLE`, el 201 anterior mintio: la llamada saliente de stay no
+  surtio efecto.
+url: "{{kongBaseUrl}}/api/v1/spots/{{spotId}}"
+method: GET
+headers:
+  Authorization: "Bearer {{accessToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200 OK', () => pm.response.to.have.status(200));
+      pm.test('la plaza del check-in esta OCCUPIED', () =>
+        pm.expect(pm.response.json().status).to.eql('OCCUPIED'));
+    language: text/javascript
+order: 3000

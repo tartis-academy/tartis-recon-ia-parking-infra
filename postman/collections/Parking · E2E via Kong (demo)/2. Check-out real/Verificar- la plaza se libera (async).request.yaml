@@ -1,0 +1,43 @@
+$kind: http-request
+description: |-
+  La plaza vuelve a `AVAILABLE`, pero **no en el momento del check-out**:
+  `CheckOutUseCase` ni siquiera tiene puerto de spot. Publica `StayClosedEvent`
+  y es spot-service quien libera la plaza al consumirlo desde RabbitMQ.
+
+  Por eso este test reintenta en vez de comprobar una vez: es consistencia
+  eventual, y afirmar lo contrario daria un rojo intermitente. Medido en local:
+  suele estar libre en <100 ms, pero en frio se ha visto tardar mas.
+url: "{{kongBaseUrl}}/api/v1/spots/{{spotId}}"
+method: GET
+headers:
+  Authorization: "Bearer {{accessToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200 OK', () => pm.response.to.have.status(200));
+
+      pm.test('la plaza vuelve a AVAILABLE (via RabbitMQ)', function (done) {
+        if (pm.response.json().status === 'AVAILABLE') {
+          pm.expect(pm.response.json().status).to.eql('AVAILABLE');
+          return done();
+        }
+        let intentos = 0;
+        const reintentar = () => {
+          pm.sendRequest({
+            url: pm.environment.get('kongBaseUrl') + '/api/v1/spots/' + pm.environment.get('spotId'),
+            method: 'GET',
+            header: { Authorization: 'Bearer ' + pm.environment.get('accessToken') }
+          }, (err, res) => {
+            if (err) { return done(err); }
+            const estado = res.json().status;
+            if (estado === 'AVAILABLE' || ++intentos >= 20) {
+              pm.expect(estado, 'sigue ocupada tras ~3s: mira si spot-service consume la cola').to.eql('AVAILABLE');
+              return done();
+            }
+            setTimeout(reintentar, 150);
+          });
+        };
+        reintentar();
+      });
+    language: text/javascript
+order: 2000
