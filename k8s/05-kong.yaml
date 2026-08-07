@@ -91,12 +91,16 @@ metadata:
   name: kong
   namespace: parking
 spec:
+  # NodePort y no ClusterIP: `kubectl port-forward` se enlaza a un pod, no al
+  # Service, y un reinicio de pod lo deja sordo a mitad de demo.
+  type: NodePort
   selector:
     app.kubernetes.io/name: kong
   ports:
     - name: proxy
       port: 8000
       targetPort: proxy
+      nodePort: 30800
     - name: admin
       port: 8001
       targetPort: admin

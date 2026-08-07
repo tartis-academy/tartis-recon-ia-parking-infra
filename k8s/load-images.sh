@@ -25,6 +25,12 @@ BUILD=false
 command -v minikube >/dev/null 2>&1 || { echo "minikube no esta en el PATH." >&2; exit 1; }
 minikube status -p "$PROFILE" >/dev/null 2>&1 || { echo "El cluster '$PROFILE' no esta arrancado (minikube start -p $PROFILE)." >&2; exit 1; }
 
+# `minikube image load` no reemplaza un tag que ya existe en el nodo: los pods
+# siguen sirviendo la build anterior sin que falle nada visible. Ver README.
+load_mutable() {
+  docker save "$1" | minikube -p "$PROFILE" ssh --native-ssh=false "docker load" >/dev/null
+}
+
 for svc in "${SERVICES[@]}"; do
   src="${COMPOSE_PROJECT}-${svc}-service:latest"
   dst="parking/${svc}-service:demo"
@@ -36,7 +42,7 @@ for svc in "${SERVICES[@]}"; do
 
   echo "==> ${src} -> ${dst}"
   docker tag "$src" "$dst"
-  minikube image load -p "$PROFILE" "$dst"
+  load_mutable "$dst"
 done
 
 for fe in "${FRONTENDS[@]}"; do
@@ -50,7 +56,7 @@ for fe in "${FRONTENDS[@]}"; do
 
   echo "==> ${src} -> ${dst}"
   docker tag "$src" "$dst"
-  minikube image load -p "$PROFILE" "$dst"
+  load_mutable "$dst"
 done
 
 for img in "${BASE_IMAGES[@]}"; do

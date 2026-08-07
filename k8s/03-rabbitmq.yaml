@@ -84,6 +84,9 @@ metadata:
   name: rabbitmq
   namespace: parking
 spec:
+  # La UI de management se publica para poder ensenar las colas en vivo; AMQP
+  # (5672) se queda dentro del cluster.
+  type: NodePort
   selector:
     app.kubernetes.io/name: rabbitmq
   ports:
@@ -93,3 +96,4 @@ spec:
     - name: management
       port: 15672
       targetPort: management
+      nodePort: 31567

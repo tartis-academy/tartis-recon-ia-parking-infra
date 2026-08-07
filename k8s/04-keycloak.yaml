@@ -201,12 +201,15 @@ metadata:
   name: keycloak
   namespace: parking
 spec:
+  # Mismo motivo que en kong: el port-forward no sobrevive a un reinicio de pod.
+  type: NodePort
   selector:
     app.kubernetes.io/name: keycloak
   ports:
     - name: http
       port: 8080
       targetPort: http
+      nodePort: 30818
     - name: management
       port: 9000
       targetPort: management

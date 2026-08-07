@@ -63,6 +63,40 @@ se alcanzan a traves de Kong.
 | `http://localhost:8000/api/v1/...` | API a traves del gateway |
 | `http://localhost:8180/` | Keycloak |
 
+### NodePort fijos (para llegar desde otra maquina)
+
+`kong` y `keycloak` son `NodePort` en el manifiesto, con puerto fijo. Es lo que
+permite alcanzarlos desde fuera del Linux **sin depender de ningun proceso en el
+host**: `kubectl port-forward` se enlaza a un pod, no al Service, y un ciclo de
+reinicio lo deja sordo a mitad de demo.
+
+| Servicio | NodePort | Notas |
+|---|---|---|
+| kong (proxy) | `30800` | |
+| keycloak | `30818` | |
+| rabbitmq (management) | `31567` | UI de colas. AMQP (5672) se queda dentro |
+| kubernetes-dashboard | `30900` | Addon; el `Service` se parchea a mano, no esta en `k8s/` |
+
+Tunel SSH desde Windows contra la IP del nodo (`minikube ip -p parking`):
+
+```powershell
+ssh -L 8000:192.168.49.2:30800 -L 8180:192.168.49.2:30818 -L 30900:192.168.49.2:30900 -L 31567:192.168.49.2:31567 roddy@192.168.1.34
+```
+
+Mapear a `localhost:8000` / `localhost:8180` en el lado de Windows **no es
+opcional**: el `iss` de los tokens, los `redirect-uri` del realm y el CORS de
+`kong.yml` estan fijados a esos dos origenes.
+
+Addons que conviene tener activos: `metrics-server` (habilita `kubectl top` y el
+HPA) y `dashboard`.
+
+```bash
+minikube addons enable metrics-server -p parking
+minikube addons enable dashboard -p parking
+kubectl -n kubernetes-dashboard patch svc kubernetes-dashboard --type merge \
+  -p '{"spec":{"type":"NodePort","ports":[{"port":80,"targetPort":9090,"nodePort":30900}]}}'
+```
+
 Parar sin perder datos: `minikube stop -p parking`.
 Borrar el cluster entero: `minikube delete -p parking`.
 
@@ -158,6 +192,37 @@ lento para no cortar peticiones en curso).
   y los defaults de `application.properties` de stay-service valen sin tocar nada.
 - `imagePullPolicy: IfNotPresent` + imagenes cargadas a mano: no hay registry, y
   asi la demo no depende de tener red.
+
+> [!warning] `minikube image load` no sobreescribe un tag que ya existe en el nodo
+> Con driver docker y runtime docker, volver a cargar `parking/<svc>:demo` deja
+> la imagen anterior en el nodo, y `minikube image rm` antes tampoco basta. No
+> falla nada visible: pods `Running`, `rollout status` en verde y Flyway
+> diciendo `Schema "public" is up to date`, sirviendo la build del dia anterior.
+> Con Compose no se ve porque build y runtime comparten el mismo daemon.
+>
+> Detectado el 2026-08-07: el JAR dentro del pod de tariff-service tenia 3
+> migraciones y la imagen construida tenia 4. Afectaba a las 8 imagenes.
+>
+> **`load-images.sh` ya lo esquiva** (funcion `load_mutable`): las 8 imagenes de
+> aplicacion entran por `docker save`. Las base (`postgres`, `rabbitmq`,
+> `keycloak`, `kong`) siguen con `image load` a proposito, porque su tag es
+> inmutable y la cache no puede ocultar nada. Si se carga una imagen a mano,
+> hacerlo asi:
+>
+> ```bash
+> docker save parking/<svc>:demo | minikube -p parking ssh --native-ssh=false "docker load"
+> kubectl -n parking rollout restart deploy/<svc>
+> ```
+>
+> Verificar por **contenido**, no por ID: `save`/`load` cambia el ID aunque el
+> contenido sea el mismo.
+>
+> ```bash
+> kubectl -n parking exec deploy/tariff-service -c tariff-service -- sh -c 'unzip -l /app/*.jar | grep "db/migration/V"'
+> ```
+>
+> Desaparece con un registry y tags inmutables por commit: mientras el tag no
+> cambie entre builds, cualquier cache puede volver a ocultarlo.
 - `startupProbe` en los micros (hasta 3 min) para que el arranque de Spring +
   Flyway no dispare la liveness y deje los pods en bucle de reinicio.
 - `JAVA_TOOL_OPTIONS=-XX:MaxRAMPercentage=75` porque la JVM dimensiona el heap
