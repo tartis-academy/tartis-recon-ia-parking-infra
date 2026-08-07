@@ -115,6 +115,41 @@ SPOTS_CAR=40 ./scripts/seed-demo-data.sh         # cupo distinto
 Si levantas con `setup.sh` o con `docker compose` directamente, el seed **no**
 se ejecuta: lánzalo a mano.
 
+### Tráfico y datos congruentes (`scripts/traffic-gen.py`)
+
+El seed deja plazas y tarifas; `traffic-gen.py` mete **vehículos y estancias**.
+Genera datos que el dominio acepta —matrícula `NNNNLLL` con las 20 consonantes
+reales, modelo que existe para esa marca, y puertas/sidecar coherentes con el
+tipo— y los entra por `POST /api/v1/stays/check-in` con concurrencia
+configurable. Sirve como entrada de las pruebas de ITEST y como motor de la demo.
+
+Da de alta el vehículo **explícitamente** antes del check-in a propósito: el
+alta automática del check-in rellena `brand`/`model`/`color` con `"Desconocido"`
+y `numDoors` con 4 fijo, que no es un dato congruente.
+
+```bash
+./scripts/traffic-gen.py --dry-run --vehicles 5 --print-payloads   # solo genera, no llama
+./scripts/traffic-gen.py --vehicles 30 --concurrency 6
+./scripts/traffic-gen.py --vehicles 50 --rate 5 --duration 60 --checkout 50
+./scripts/traffic-gen.py --scenario cb05 --scenario rn11
+```
+
+Termina con un resumen de entradas, salidas, errores y percentiles de tiempo, y
+**sale con código distinto de cero si hubo fallos**, así que vale para CI. Los
+rechazos de negocio (`409` de parking lleno o matrícula duplicada, `422` de
+vehículo dado de baja) se cuentan aparte y **no** se consideran errores.
+
+Escenarios de borde, verificados contra el stack:
+
+| `--scenario` | Qué prueba | Esperado |
+|---|---|---|
+| `cb05` | misma matrícula con estancia activa | `409` |
+| `rn11` | vehículo dado de baja | `422` |
+| `parking-lleno` | agota las plazas de un tipo (RN-01) | `409` |
+
+`parking-lleno` llena el parking de motos y **lo vacía al terminar**; aun así,
+no lo lances con público delante sin saber lo que hace.
+
 Si prefieres ir a mano:
 
 ```bash
