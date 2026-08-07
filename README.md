@@ -150,6 +150,13 @@ Escenarios de borde, verificados contra el stack:
 `parking-lleno` llena el parking de motos y **lo vacía al terminar**; aun así,
 no lo lances con público delante sin saber lo que hace.
 
+Dos atajos para usarlo en directo:
+
+```bash
+./scripts/traffic-gen.py --status         # plazas por tipo/estado y estancias abiertas
+./scripts/traffic-gen.py --checkout-all   # cierra todo y deja el parking vacío
+```
+
 Si prefieres ir a mano:
 
 ```bash

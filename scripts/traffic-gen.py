@@ -280,6 +280,39 @@ ESCENARIOS = {
 }
 
 
+def estado(cli):
+    cod, plazas, _ = cli.peticion("GET", "/api/v1/spots")
+    if cod != 200:
+        print(f"ERROR: /api/v1/spots devolvio {cod}")
+        return 1
+    lista = plazas["content"] if isinstance(plazas, dict) else plazas
+    n = collections.Counter((p["type"], p["status"]) for p in lista)
+    print("==> Plazas")
+    for k in sorted(n):
+        print(f"  {k[0]:<10} {k[1]:<10} {n[k]:>3}")
+    _, pagina, _ = cli.peticion("GET", "/api/v1/stays?status=IN_PROGRESS&page=0&size=1")
+    print(f"\n==> Estancias en curso: {pagina.get('totalElements', '?')}")
+    return 0
+
+
+def vaciar(cli):
+    """Check-out de todo lo que este dentro. Deja el parking a cero."""
+    _, pagina, _ = cli.peticion("GET", "/api/v1/stays?status=IN_PROGRESS&page=0&size=200")
+    matriculas = [s["plate"] for s in pagina.get("content", [])]
+    print(f"==> {len(matriculas)} estancias abiertas")
+    fallos = 0
+    for p in matriculas:
+        cod, cuerpo, _ = cli.peticion("POST", "/api/v1/stays/check-out", {"plate": p})
+        if cod != 200:
+            fallos += 1
+            print(f"  FALLO {p}: {cod} {cuerpo.get('message', '')}")
+    print(f"==> {len(matriculas) - fallos} cerradas, {fallos} fallos")
+    # Las plazas las libera spot-service al consumir el evento, no el check-out.
+    if matriculas:
+        print("    (las plazas tardan un instante en volver a AVAILABLE: es asincrono)")
+    return 1 if fallos else 0
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--base-url", default="http://localhost:8000", help="Kong (por defecto %(default)s)")
@@ -298,12 +331,20 @@ def main():
     ap.add_argument("--scenario", action="append", default=[], choices=list(ESCENARIOS),
                     help="escenario de borde (repetible)")
     ap.add_argument("--seed", type=int, default=None, help="semilla, para tandas reproducibles")
+    ap.add_argument("--checkout-all", action="store_true",
+                    help="cierra todas las estancias abiertas y sale (deja el parking vacio)")
+    ap.add_argument("--status", action="store_true", help="imprime plazas y estancias abiertas, y sale")
     args = ap.parse_args()
 
     gen = Generador(args.seed)
     cli = Cliente(args.base_url, args.keycloak_url, args.realm, args.client_id,
                   args.user, args.password, args.dry_run)
     res = Resumen()
+
+    if args.status:
+        return estado(cli)
+    if args.checkout_all:
+        return vaciar(cli)
 
     modo = "SIMULACION (sin llamadas reales)" if args.dry_run else args.base_url
     print(f"==> {args.vehicles} vehiculos · concurrencia {args.concurrency} · destino {modo}")
